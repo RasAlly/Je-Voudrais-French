@@ -196,9 +196,14 @@ export const curriculum: Unit[] = [
 
 export const itemsById = new Map<string, Item>();
 export const lessonsById = new Map<string, Lesson>();
+/** item id → the unit it belongs to (used for flashcard decks) */
+export const unitOfItem = new Map<string, string>();
 for (const unit of curriculum) {
   for (const lesson of unit.lessons) {
     lessonsById.set(lesson.id, lesson);
-    for (const item of lesson.items) itemsById.set(item.id, item);
+    for (const item of lesson.items) {
+      itemsById.set(item.id, item);
+      unitOfItem.set(item.id, unit.id);
+    }
   }
 }

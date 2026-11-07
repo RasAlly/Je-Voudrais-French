@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import type { ComponentProps, ReactNode } from "react";
+import { router } from "expo-router";
 import { ActivityIndicator, Pressable, StyleSheet, Text, View, type ViewStyle } from "react-native";
 import { speakFrench } from "../lib/speech";
 import { colors, fonts, radius, space } from "../theme";
@@ -114,6 +115,65 @@ const choiceStates = {
   wrong: { bg: colors.errorSoft, border: colors.error, fg: colors.error },
 };
 
+/** Title row for pushed screens: back chevron + serif title + optional right content. */
+export function ScreenHeader({ title, right }: { title: string; right?: ReactNode }) {
+  return (
+    <View style={styles.screenHeader}>
+      <Pressable
+        onPress={() => (router.canGoBack() ? router.back() : router.replace("/"))}
+        hitSlop={12}
+        accessibilityRole="button"
+        accessibilityLabel="Back"
+        style={({ pressed }) => [styles.backButton, pressed && { backgroundColor: colors.surfaceAlt }]}
+      >
+        <Ionicons name="chevron-back" size={26} color={colors.textMuted} />
+      </Pressable>
+      <Text style={styles.screenTitle} numberOfLines={1}>
+        {title}
+      </Text>
+      {right}
+    </View>
+  );
+}
+
+/** Pill-style segmented control. */
+export function Segmented<T extends string>({
+  options,
+  value,
+  onChange,
+}: {
+  options: { value: T; label: string }[];
+  value: T;
+  onChange: (v: T) => void;
+}) {
+  return (
+    <View style={styles.segmented}>
+      {options.map((o) => (
+        <Pressable
+          key={o.value}
+          onPress={() => onChange(o.value)}
+          style={[styles.segment, value === o.value && styles.segmentOn]}
+        >
+          <Text style={[styles.segmentText, value === o.value && styles.segmentTextOn]}>{o.label}</Text>
+        </Pressable>
+      ))}
+    </View>
+  );
+}
+
+/** Small selectable chip. */
+export function Chip({ label, selected, onPress, disabled }: { label: string; selected?: boolean; onPress: () => void; disabled?: boolean }) {
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={disabled}
+      style={[styles.chip, selected && styles.chipOn, disabled && { opacity: 0.4 }]}
+    >
+      <Text style={[styles.chipText, selected && styles.chipTextOn]}>{label}</Text>
+    </Pressable>
+  );
+}
+
 export function Center({ children }: { children: ReactNode }) {
   return <View style={styles.center}>{children}</View>;
 }
@@ -155,4 +215,23 @@ export const styles = StyleSheet.create({
   },
   choiceText: { fontSize: 17, textAlign: "center" },
   center: { flex: 1, alignItems: "center", justifyContent: "center", padding: space.lg, gap: space.md },
+  screenHeader: { flexDirection: "row", alignItems: "center", gap: space.xs, marginLeft: -space.sm },
+  backButton: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center" },
+  screenTitle: { flex: 1, fontFamily: fonts.serif, fontSize: 28, color: colors.text },
+  segmented: { flexDirection: "row", backgroundColor: colors.surfaceAlt, borderRadius: radius.pill, padding: 3 },
+  segment: { flex: 1, paddingVertical: 7, paddingHorizontal: 10, borderRadius: radius.pill, alignItems: "center" },
+  segmentOn: { backgroundColor: colors.surface },
+  segmentText: { fontSize: 13, color: colors.textMuted, fontWeight: "600" },
+  segmentTextOn: { color: colors.primary },
+  chip: {
+    paddingVertical: 7,
+    paddingHorizontal: 12,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  chipOn: { backgroundColor: colors.primary, borderColor: colors.primary },
+  chipText: { fontSize: 13, color: colors.text, fontWeight: "500" },
+  chipTextOn: { color: colors.onPrimary },
 });

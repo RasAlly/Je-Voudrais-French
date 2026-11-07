@@ -24,8 +24,8 @@ export default function TabsLayout() {
       }}
     >
       <Tabs.Screen name="index" options={{ title: "Learn", tabBarIcon: icon("book-outline") }} />
-      <Tabs.Screen name="review" options={{ title: "Review", tabBarIcon: icon("layers-outline") }} />
-      <Tabs.Screen name="speak" options={{ title: "Speak", tabBarIcon: icon("mic-outline") }} />
+      <Tabs.Screen name="practice" options={{ title: "Practice", tabBarIcon: icon("barbell-outline") }} />
+      <Tabs.Screen name="cards" options={{ title: "Cards", tabBarIcon: icon("albums-outline") }} />
       <Tabs.Screen name="progress" options={{ title: "Progress", tabBarIcon: icon("stats-chart-outline") }} />
     </Tabs>
   );

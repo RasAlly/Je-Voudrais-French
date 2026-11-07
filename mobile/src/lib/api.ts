@@ -8,6 +8,8 @@ export interface Item {
   alt?: string[];
   note?: string;
   learned?: boolean;
+  due?: boolean;
+  unitId?: string;
 }
 
 export interface StudyItem extends Item {
@@ -86,6 +88,7 @@ export const api = {
   submitReview: (body: { xp: number; results: { itemId: string; grade: number }[] }) =>
     request("/api/review", { method: "POST", body: JSON.stringify({ ...body, day: localDay() }) }),
   items: () => request<{ items: Item[] }>("/api/items"),
+  addXp: (xp: number) => request("/api/xp", { method: "POST", body: JSON.stringify({ xp, day: localDay() }) }),
   stats: () => request<Stats>(`/api/stats?today=${localDay()}`),
   study: () => request<{ items: StudyItem[]; pool: Item[]; graduateAt: number }>("/api/study"),
   addToStudy: (itemId: string) => request("/api/study", { method: "POST", body: JSON.stringify({ itemId }) }),

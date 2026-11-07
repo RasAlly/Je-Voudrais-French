@@ -2,7 +2,7 @@ import express, { type NextFunction, type Request, type Response } from "express
 import cors from "cors";
 import multer from "multer";
 import { initDb, getDb } from "./db.js";
-import { curriculum, itemsById, lessonsById } from "./curriculum.js";
+import { curriculum, itemsById, lessonsById, unitOfItem } from "./curriculum.js";
 import { schedule, type Grade, type CardState } from "./srs.js";
 
 // Load server/.env for local development (Railway provides real env vars instead).
@@ -132,9 +132,25 @@ app.post("/api/lessons/:id/complete", async (req, res) => {
 
 /** Every item in the course plus whether it's in the review deck yet. */
 app.get("/api/items", async (_req, res) => {
-  const { rows } = await getDb().query<{ item_id: string }>(`SELECT item_id FROM cards`);
-  const learned = new Set(rows.map((r) => r.item_id));
-  res.json({ items: [...itemsById.values()].map((i) => ({ ...i, learned: learned.has(i.id) })) });
+  const { rows } = await getDb().query<{ item_id: string; due: boolean }>(
+    `SELECT item_id, due_at <= now() AS due FROM cards`,
+  );
+  const cards = new Map(rows.map((r) => [r.item_id, r]));
+  res.json({
+    items: [...itemsById.values()].map((i) => ({
+      ...i,
+      unitId: unitOfItem.get(i.id),
+      learned: cards.has(i.id),
+      due: cards.get(i.id)?.due ?? false,
+    })),
+  });
+});
+
+/** XP from practice drills (numbers, etc.) that aren't tied to specific words. */
+app.post("/api/xp", async (req, res) => {
+  const { xp = 0, day } = req.body ?? {};
+  await addXp(isDay(day) ? day : todayUtc(), Math.min(Number(xp) || 0, 500));
+  res.json({ ok: true });
 });
 
 // ---- Review (spaced repetition) ------------------------------------------

@@ -5,7 +5,7 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-nati
 import { SafeAreaView } from "react-native-safe-area-context";
 import { SPEAK_PASS } from "../../components/Exercises";
 import { ErrorState, Loading } from "../../components/States";
-import { Button, FrenchText, SpeakButtons } from "../../components/ui";
+import { Button, FrenchText, ScreenHeader, SpeakButtons } from "../../components/ui";
 import type { Item } from "../../lib/api";
 import { api } from "../../lib/api";
 import { similarity, wordMatches } from "../../lib/compare";
@@ -58,8 +58,9 @@ export default function SpeakScreen() {
 
   return (
     <SafeAreaView style={s.screen} edges={["top"]}>
+      <ScreenHeader title="Prononciation" />
       <View style={s.header}>
-        <Text style={s.title}>Prononciation</Text>
+        <Text style={s.muted}>Say a phrase, get word-by-word feedback</Text>
         <View style={s.toggle}>
           {(["learned", "all"] as const).map((k) => (
             <Pressable key={k} onPress={() => (setScope(k), setIndex(0), setHeard(null))} style={[s.seg, scope === k && s.segOn]}>
@@ -117,7 +118,7 @@ export default function SpeakScreen() {
 const s = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bg, padding: space.lg, gap: space.lg },
   header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  title: { fontFamily: fonts.serif, fontSize: 30, color: colors.text },
+  muted: { flex: 1, color: colors.textMuted, fontSize: 13 },
   toggle: { flexDirection: "row", backgroundColor: colors.surfaceAlt, borderRadius: radius.pill, padding: 3 },
   seg: { paddingVertical: 6, paddingHorizontal: 12, borderRadius: radius.pill },
   segOn: { backgroundColor: colors.surface },

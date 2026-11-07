@@ -1,18 +1,25 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
+import { useState } from "react";
 import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ErrorState, Loading } from "../../components/States";
-import { Button, Card } from "../../components/ui";
+import { Button, Card, Chip, Segmented } from "../../components/ui";
 import { api, type StudyItem } from "../../lib/api";
 import { speakFrench } from "../../lib/speech";
+import { type Deck, type Direction, filterDeck } from "../../lib/decks";
 import { useLoad } from "../../lib/useLoad";
 import { colors, fonts, radius, space } from "../../theme";
 
-export default function ReviewScreen() {
+export default function CardsScreen() {
   const { data, error, loading, reload } = useLoad(async () => {
-    const [stats, { items }, study] = await Promise.all([api.stats(), api.items(), api.study()]);
-    return { stats, learned: items.filter((i) => i.learned), study };
+    const [stats, { items }, study, { units }] = await Promise.all([
+      api.stats(),
+      api.items(),
+      api.study(),
+      api.course(),
+    ]);
+    return { stats, items, learned: items.filter((i) => i.learned), study, units };
   });
 
   if (error) return <ErrorState message={error} onRetry={reload} />;
@@ -27,7 +34,7 @@ export default function ReviewScreen() {
         contentContainerStyle={s.content}
         ListHeaderComponent={
           <View style={{ gap: space.md, marginBottom: space.md }}>
-            <Text style={s.title}>Révision</Text>
+            <Text style={s.title}>Cartes</Text>
             <Card style={{ gap: space.md, alignItems: "center" }}>
               <Text style={s.big}>{data.stats.due}</Text>
               <Text style={s.muted}>{data.stats.due === 1 ? "card due" : "cards due"} today</Text>
@@ -38,6 +45,15 @@ export default function ReviewScreen() {
                 style={{ alignSelf: "stretch" }}
               />
             </Card>
+
+            <Flashcards
+              decks={[
+                { id: "due", label: "Due" },
+                { id: "learned", label: "My words" },
+                { id: "study", label: "Study list" },
+                ...data.units.map((u) => ({ id: `unit:${u.id}` as Deck, label: u.en ?? u.title })),
+              ].map((d) => ({ ...d, count: filterDeck(d.id as Deck, data.items, data.study.items).length }))}
+            />
 
             <StudyList items={data.study.items} graduateAt={data.study.graduateAt} onChange={reload} />
 
@@ -53,6 +69,48 @@ export default function ReviewScreen() {
         )}
       />
     </SafeAreaView>
+  );
+}
+
+/** Deck + direction picker that launches a flashcard session. */
+function Flashcards({ decks }: { decks: { id: string; label: string; count: number }[] }) {
+  const [deck, setDeck] = useState<string>(() => decks.find((d) => d.count > 0)?.id ?? "learned");
+  const [dir, setDir] = useState<Direction>("fr");
+  const selected = decks.find((d) => d.id === deck);
+  return (
+    <Card style={{ gap: space.md }}>
+      <View style={s.studyHeader}>
+        <View style={{ flex: 1 }}>
+          <Text style={s.cardTitle}>Flashcards</Text>
+          <Text style={s.muted}>Tap to flip, then rate yourself</Text>
+        </View>
+        <Ionicons name="albums" size={22} color={colors.primary} />
+      </View>
+      <View style={s.chips}>
+        {decks.map((d) => (
+          <Chip
+            key={d.id}
+            label={`${d.label} · ${d.count}`}
+            selected={deck === d.id}
+            disabled={d.count === 0}
+            onPress={() => setDeck(d.id)}
+          />
+        ))}
+      </View>
+      <Segmented
+        options={[
+          { value: "fr", label: "Français → English" },
+          { value: "en", label: "English → Français" },
+        ]}
+        value={dir}
+        onChange={setDir}
+      />
+      <Button
+        title={selected?.count ? `Start · ${selected.count} cards` : "No cards in this deck"}
+        disabled={!selected?.count}
+        onPress={() => router.push({ pathname: "/flashcards", params: { deck, dir } })}
+      />
+    </Card>
   );
 }
 
@@ -109,6 +167,7 @@ function StudyList({ items, graduateAt, onChange }: { items: StudyItem[]; gradua
 
 const s = StyleSheet.create({
   cardTitle: { fontSize: 18, fontWeight: "600", color: colors.text },
+  chips: { flexDirection: "row", flexWrap: "wrap", gap: space.sm },
   studyHeader: { flexDirection: "row", alignItems: "flex-start", gap: space.md },
   studyRow: { flexDirection: "row", alignItems: "center", gap: space.md },
   studyEn: { fontSize: 13, color: colors.textMuted, marginTop: 1 },
