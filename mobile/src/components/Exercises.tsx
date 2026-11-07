@@ -1,11 +1,12 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Keyboard, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import type { Exercise } from "../lib/exercises";
 import { gradeTyped, normalize, sameMeaning, similarity, wordMatches } from "../lib/compare";
 import { speakFrench } from "../lib/speech";
 import { useSpeechToText } from "../lib/useRecorder";
 import { colors, fonts, radius, space } from "../theme";
+import type { ViewStyle } from "react-native";
 import { Button, Choice, FrenchText, SpeakButtons } from "./ui";
 
 export type Result = {
@@ -148,6 +149,7 @@ export function TypeFr({ ex, locked, onResult }: Props<"type_fr" | "dictation">)
     if (dictation) speakFrench(ex.item.fr);
   }, [dictation, ex.item.fr]);
   const check = () => {
+    Keyboard.dismiss();
     const g = gradeTyped(text, ex.item.fr);
     speakFrench(ex.item.fr);
     onResult({
@@ -158,37 +160,52 @@ export function TypeFr({ ex, locked, onResult }: Props<"type_fr" | "dictation">)
   };
   return (
     <View style={s.fill}>
-      <Prompt>{dictation ? "Type what you hear" : "Write this in French"}</Prompt>
-      <View style={s.promptBox}>
-        {dictation ? <SpeakButtons text={ex.item.fr} size="lg" /> : <Text style={s.english}>{ex.item.en}</Text>}
-      </View>
-      <TextInput
-        value={text}
-        onChangeText={setText}
-        editable={!locked}
-        placeholder="Type in French…"
-        placeholderTextColor={colors.textMuted}
-        autoCapitalize="none"
-        autoCorrect={false}
-        autoFocus
-        style={s.input}
-        onSubmitEditing={() => text.trim() && !locked && check()}
-        returnKeyType="done"
-      />
+      {/* Scrollable so nothing gets trapped under the keyboard; drag down to dismiss it. */}
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={s.scrollBody}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+      >
+        <Pressable onPress={Keyboard.dismiss} style={{ gap: space.md }} accessible={false}>
+          <Prompt>{dictation ? "Type what you hear" : "Write this in French"}</Prompt>
+          <View style={s.promptBox}>
+            {dictation ? <SpeakButtons text={ex.item.fr} size="lg" /> : <Text style={s.english}>{ex.item.en}</Text>}
+          </View>
+        </Pressable>
+        <TextInput
+          value={text}
+          onChangeText={setText}
+          editable={!locked}
+          placeholder="Type in French…"
+          placeholderTextColor={colors.textMuted}
+          autoCapitalize="none"
+          autoCorrect={false}
+          autoFocus
+          style={s.input}
+          onSubmitEditing={() => text.trim() && !locked && check()}
+          returnKeyType="done"
+        />
+        {!locked && (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={s.accentRow}
+          >
+            {ACCENTS.map((a) => (
+              <Pressable key={a} onPress={() => setText((t) => t + a)} style={s.accentKey}>
+                <Text style={s.accentText}>{a}</Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+        )}
+      </ScrollView>
       {!locked && (
-        <View style={s.accentRow}>
-          {ACCENTS.map((a) => (
-            <Pressable key={a} onPress={() => setText((t) => t + a)} style={s.accentKey}>
-              <Text style={s.accentText}>{a}</Text>
-            </Pressable>
-          ))}
+        <View style={s.footerRow}>
+          <DontKnow item={ex.item} onResult={onResult} style={{ flex: 1 }} />
+          <Button title="Check" disabled={!text.trim()} onPress={check} style={{ flex: 1.4 }} />
         </View>
-      )}
-      {!locked && (
-        <Footer>
-          <Button title="Check" disabled={!text.trim()} onPress={check} />
-          <DontKnow item={ex.item} onResult={onResult} />
-        </Footer>
       )}
     </View>
   );
@@ -230,7 +247,7 @@ export function Arrange({ ex, locked, onResult }: Props<"arrange">) {
               onResult({ correct: normalize(sentence) === normalize(ex.item.fr), answer: ex.item.fr });
             }}
           />
-          <DontKnow item={ex.item} onResult={onResult} />
+          <DontKnow item={ex.item} onResult={onResult} variant="ghost" />
         </Footer>
       )}
     </View>
@@ -238,13 +255,25 @@ export function Arrange({ ex, locked, onResult }: Props<"arrange">) {
 }
 
 /** Reveal the answer, count it as a miss, and save the word for a deep dive. */
-function DontKnow({ item, onResult }: { item: Exercise["item"]; onResult: (r: Result) => void }) {
+function DontKnow({
+  item,
+  onResult,
+  variant = "secondary",
+  style,
+}: {
+  item: Exercise["item"];
+  onResult: (r: Result) => void;
+  variant?: "secondary" | "ghost";
+  style?: ViewStyle;
+}) {
   return (
     <Button
       title="Don't know"
-      variant="ghost"
+      variant={variant}
+      style={style}
       icon="help-circle-outline"
       onPress={() => {
+        Keyboard.dismiss();
         speakFrench(item.fr);
         onResult({
           correct: false,
@@ -383,6 +412,8 @@ const s = StyleSheet.create({
   },
   options: { gap: space.sm },
   footer: { marginTop: "auto", gap: space.sm },
+  footerRow: { flexDirection: "row", gap: space.sm, paddingTop: space.sm },
+  scrollBody: { gap: space.md, paddingBottom: space.sm },
   input: {
     backgroundColor: colors.surface,
     borderWidth: 1.5,
@@ -393,7 +424,7 @@ const s = StyleSheet.create({
     fontFamily: fonts.serif,
     color: colors.text,
   },
-  accentRow: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
+  accentRow: { flexDirection: "row", gap: 6 },
   accentKey: {
     minWidth: 36,
     paddingVertical: 8,
