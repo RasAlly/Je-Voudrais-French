@@ -200,10 +200,34 @@ app.get("/api/stats", async (req, res) => {
 
 // ---- Speech to text -------------------------------------------------------
 
+/**
+ * Both providers speak the same OpenAI-compatible transcription API.
+ * Groq (free tier) is used whenever GROQ_API_KEY is set; otherwise OpenAI.
+ */
+function transcriptionProvider() {
+  if (process.env.GROQ_API_KEY) {
+    return {
+      name: "groq",
+      key: process.env.GROQ_API_KEY,
+      url: "https://api.groq.com/openai/v1/audio/transcriptions",
+      model: process.env.TRANSCRIBE_MODEL || "whisper-large-v3",
+    };
+  }
+  if (process.env.OPENAI_API_KEY) {
+    return {
+      name: "openai",
+      key: process.env.OPENAI_API_KEY,
+      url: "https://api.openai.com/v1/audio/transcriptions",
+      model: process.env.TRANSCRIBE_MODEL || "gpt-4o-mini-transcribe",
+    };
+  }
+  return null;
+}
+
 app.post("/api/transcribe", upload.single("audio"), async (req, res) => {
-  const key = process.env.OPENAI_API_KEY;
-  if (!key) {
-    res.status(501).json({ error: "OPENAI_API_KEY is not set on the server" });
+  const provider = transcriptionProvider();
+  if (!provider) {
+    res.status(501).json({ error: "Speech-to-text isn't set up: add GROQ_API_KEY on the server" });
     return;
   }
   if (!req.file) {
@@ -216,18 +240,21 @@ app.post("/api/transcribe", upload.single("audio"), async (req, res) => {
     new Blob([new Uint8Array(req.file.buffer)], { type: req.file.mimetype || "audio/m4a" }),
     req.file.originalname || "speech.m4a",
   );
-  form.append("model", process.env.TRANSCRIBE_MODEL || "gpt-4o-mini-transcribe");
+  form.append("model", provider.model);
   form.append("language", "fr");
+  form.append("temperature", "0");
 
-  const r = await fetch("https://api.openai.com/v1/audio/transcriptions", {
+  const r = await fetch(provider.url, {
     method: "POST",
-    headers: { Authorization: `Bearer ${key}` },
+    headers: { Authorization: `Bearer ${provider.key}` },
     body: form,
   });
   if (!r.ok) {
     const detail = await r.text();
-    console.error("transcription failed", r.status, detail);
-    res.status(502).json({ error: "transcription failed" });
+    console.error(`transcription failed (${provider.name})`, r.status, detail);
+    res
+      .status(r.status === 429 ? 429 : 502)
+      .json({ error: r.status === 429 ? "Speech limit reached — try again in a minute" : "transcription failed" });
     return;
   }
   const data = (await r.json()) as { text?: string };
