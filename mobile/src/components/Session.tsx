@@ -50,7 +50,6 @@ export function Session({ title, exercises, onFinish }: Props) {
   const [queue, setQueue] = useState<Exercise[]>(exercises);
   const [index, setIndex] = useState(0);
   const [feedback, setFeedback] = useState<Result | null>(null);
-  const [speakingOff, setSpeakingOff] = useState(false);
   const [done, setDone] = useState(false);
   const [saving, setSaving] = useState(false);
   const [tocOpen, setTocOpen] = useState(false);
@@ -65,13 +64,11 @@ export function Session({ title, exercises, onFinish }: Props) {
   const score = vals.length ? Math.round((vals.filter(Boolean).length / vals.length) * 100) : 100;
   const summary: SessionSummary = { firstTry, missed, score, xp: 10 + Math.round(score / 10) };
 
-  const advance = (skipSpeak = speakingOff) => {
+  const advance = () => {
     stopSpeaking();
     if (ex.kind === "intro") setStatus((st) => ({ ...st, [index]: st[index] ?? "seen" }));
     setFeedback(null);
-    let next = index + 1;
-    // Skip remaining speaking exercises once the user says they can't speak.
-    while (skipSpeak && queue[next]?.kind === "speak") next++;
+    const next = index + 1;
     if (next >= queue.length) setDone(true);
     else setIndex(next);
   };
@@ -95,11 +92,6 @@ export function Session({ title, exercises, onFinish }: Props) {
     // Missed items come back at the end of the session.
     if (!r.correct) setQueue((q) => [...q, { ...ex }]);
     setFeedback(r);
-  };
-
-  const skipSpeaking = () => {
-    setSpeakingOff(true);
-    advance(true);
   };
 
   if (done) {
@@ -149,7 +141,7 @@ export function Session({ title, exercises, onFinish }: Props) {
           {ex.kind === "listen_choose" && <ListenChoose key={index} {...common} ex={ex} />}
           {(ex.kind === "type_fr" || ex.kind === "dictation") && <TypeFr key={index} {...common} ex={ex} />}
           {ex.kind === "arrange" && <Arrange key={index} {...common} ex={ex} />}
-          {ex.kind === "speak" && <Speak key={index} {...common} ex={ex} onSkip={skipSpeaking} />}
+          {ex.kind === "speak" && <Speak key={index} {...common} ex={ex} onSkip={() => advance()} />}
         </View>
       </KeyboardAvoidingView>
 

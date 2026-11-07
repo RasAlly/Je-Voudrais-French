@@ -21,6 +21,7 @@ type Props<K extends Exercise["kind"]> = {
   ex: Extract<Exercise, { kind: K }>;
   locked: boolean;
   onResult: (r: Result) => void;
+  /** Move on without grading (used when speech can't work at all). */
   onSkip?: () => void;
 };
 
@@ -371,7 +372,8 @@ export function Speak({ ex, locked, onResult, onSkip }: Props<"speak">) {
               onPress={() => onResult({ correct: false, answer: ex.item.fr, note: `Heard: “${heard}”` })}
             />
           ) : null}
-          {onSkip && <Button title="Can't speak now" variant="ghost" onPress={onSkip} />}
+          {/* Only offered when the mic or transcription fails, so a broken mic can't trap you. */}
+          {stt.error && heard == null && onSkip && <Button title="Skip" variant="ghost" onPress={onSkip} />}
         </Footer>
       )}
     </View>
