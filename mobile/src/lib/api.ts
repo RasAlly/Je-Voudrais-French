@@ -1,4 +1,5 @@
 import Constants from "expo-constants";
+import { File } from "expo-file-system";
 
 export interface Item {
   id: string;
@@ -95,8 +96,11 @@ export const api = {
     }),
 
   async transcribe(uri: string): Promise<string> {
+    // Expo's fetch needs a real Blob, not React Native's { uri, name, type } object.
+    // expo-file-system's File implements Blob and reads the recording from disk.
+    const file = new File(uri);
     const form = new FormData();
-    form.append("audio", { uri, name: "speech.m4a", type: "audio/m4a" } as any);
+    form.append("audio", file, file.name || "speech.m4a");
     const res = await fetch(`${BASE_URL}/api/transcribe`, {
       method: "POST",
       headers: { "x-app-token": TOKEN },
