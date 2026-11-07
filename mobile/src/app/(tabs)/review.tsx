@@ -1,17 +1,18 @@
+import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ErrorState, Loading } from "../../components/States";
 import { Button, Card } from "../../components/ui";
-import { api } from "../../lib/api";
+import { api, type StudyItem } from "../../lib/api";
 import { speakFrench } from "../../lib/speech";
 import { useLoad } from "../../lib/useLoad";
-import { colors, fonts, space } from "../../theme";
+import { colors, fonts, radius, space } from "../../theme";
 
 export default function ReviewScreen() {
   const { data, error, loading, reload } = useLoad(async () => {
-    const [stats, { items }] = await Promise.all([api.stats(), api.items()]);
-    return { stats, learned: items.filter((i) => i.learned) };
+    const [stats, { items }, study] = await Promise.all([api.stats(), api.items(), api.study()]);
+    return { stats, learned: items.filter((i) => i.learned), study };
   });
 
   if (error) return <ErrorState message={error} onRetry={reload} />;
@@ -37,6 +38,9 @@ export default function ReviewScreen() {
                 style={{ alignSelf: "stretch" }}
               />
             </Card>
+
+            <StudyList items={data.study.items} graduateAt={data.study.graduateAt} onChange={reload} />
+
             <Text style={s.section}>Your words · {data.learned.length}</Text>
           </View>
         }
@@ -52,7 +56,65 @@ export default function ReviewScreen() {
   );
 }
 
+/** Words marked "don't know", with progress toward graduating off the list. */
+function StudyList({ items, graduateAt, onChange }: { items: StudyItem[]; graduateAt: number; onChange: () => void }) {
+  return (
+    <Card style={{ gap: space.md }}>
+      <View style={s.studyHeader}>
+        <View style={{ flex: 1 }}>
+          <Text style={s.cardTitle}>Study list</Text>
+          <Text style={s.muted}>
+            {items.length
+              ? `${items.length} ${items.length === 1 ? "word" : "words"} to dig into`
+              : "Tap “Don't know” in a lesson to save tricky words here."}
+          </Text>
+        </View>
+        <Ionicons name="bookmark" size={22} color={colors.primary} />
+      </View>
+
+      {items.map((it) => (
+        <View key={it.id} style={s.studyRow}>
+          <Pressable style={{ flex: 1 }} onPress={() => speakFrench(it.fr)}>
+            <Text style={s.fr}>{it.fr}</Text>
+            <Text style={s.studyEn}>{it.en}</Text>
+          </Pressable>
+          <View style={s.dots}>
+            {Array.from({ length: graduateAt }, (_, i) => (
+              <View key={i} style={[s.dot, i < it.cleanRuns && s.dotOn]} />
+            ))}
+          </View>
+          <Pressable
+            hitSlop={8}
+            accessibilityLabel={`Deep dive ${it.fr}`}
+            onPress={() => router.push({ pathname: "/study-session", params: { item: it.id } })}
+          >
+            <Ionicons name="play-circle-outline" size={26} color={colors.primary} />
+          </Pressable>
+          <Pressable
+            hitSlop={8}
+            accessibilityLabel={`Remove ${it.fr}`}
+            onPress={() => api.removeFromStudy(it.id).then(onChange).catch(() => {})}
+          >
+            <Ionicons name="close-circle-outline" size={24} color={colors.locked} />
+          </Pressable>
+        </View>
+      ))}
+
+      {items.length > 0 && (
+        <Button title="Start deep dive" icon="layers-outline" onPress={() => router.push("/study-session")} />
+      )}
+    </Card>
+  );
+}
+
 const s = StyleSheet.create({
+  cardTitle: { fontSize: 18, fontWeight: "600", color: colors.text },
+  studyHeader: { flexDirection: "row", alignItems: "flex-start", gap: space.md },
+  studyRow: { flexDirection: "row", alignItems: "center", gap: space.md },
+  studyEn: { fontSize: 13, color: colors.textMuted, marginTop: 1 },
+  dots: { flexDirection: "row", gap: 4 },
+  dot: { width: 8, height: 8, borderRadius: radius.pill, backgroundColor: colors.surfaceAlt },
+  dotOn: { backgroundColor: colors.success },
   screen: { flex: 1, backgroundColor: colors.bg },
   content: { padding: space.lg },
   title: { fontFamily: fonts.serif, fontSize: 30, color: colors.text },

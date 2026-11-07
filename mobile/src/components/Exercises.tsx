@@ -8,7 +8,13 @@ import { useSpeechToText } from "../lib/useRecorder";
 import { colors, fonts, radius, space } from "../theme";
 import { Button, Choice, FrenchText, SpeakButtons } from "./ui";
 
-export type Result = { correct: boolean; answer?: string; note?: string };
+export type Result = {
+  correct: boolean;
+  answer?: string;
+  note?: string;
+  /** User tapped "Don't know" — the session adds the word to the study list. */
+  dontKnow?: boolean;
+};
 
 type Props<K extends Exercise["kind"]> = {
   ex: Extract<Exercise, { kind: K }>;
@@ -135,8 +141,12 @@ export function ListenChoose({ ex, locked, onResult }: Props<"listen_choose">) {
 
 const ACCENTS = ["é", "è", "ê", "à", "â", "ç", "ù", "û", "ô", "î", "ï", "œ", "'"];
 
-export function TypeFr({ ex, locked, onResult }: Props<"type_fr">) {
+export function TypeFr({ ex, locked, onResult }: Props<"type_fr" | "dictation">) {
+  const dictation = ex.kind === "dictation";
   const [text, setText] = useState("");
+  useEffect(() => {
+    if (dictation) speakFrench(ex.item.fr);
+  }, [dictation, ex.item.fr]);
   const check = () => {
     const g = gradeTyped(text, ex.item.fr);
     speakFrench(ex.item.fr);
@@ -148,9 +158,9 @@ export function TypeFr({ ex, locked, onResult }: Props<"type_fr">) {
   };
   return (
     <View style={s.fill}>
-      <Prompt>Write this in French</Prompt>
+      <Prompt>{dictation ? "Type what you hear" : "Write this in French"}</Prompt>
       <View style={s.promptBox}>
-        <Text style={s.english}>{ex.item.en}</Text>
+        {dictation ? <SpeakButtons text={ex.item.fr} size="lg" /> : <Text style={s.english}>{ex.item.en}</Text>}
       </View>
       <TextInput
         value={text}
@@ -177,6 +187,7 @@ export function TypeFr({ ex, locked, onResult }: Props<"type_fr">) {
       {!locked && (
         <Footer>
           <Button title="Check" disabled={!text.trim()} onPress={check} />
+          <DontKnow item={ex.item} onResult={onResult} />
         </Footer>
       )}
     </View>
@@ -219,9 +230,30 @@ export function Arrange({ ex, locked, onResult }: Props<"arrange">) {
               onResult({ correct: normalize(sentence) === normalize(ex.item.fr), answer: ex.item.fr });
             }}
           />
+          <DontKnow item={ex.item} onResult={onResult} />
         </Footer>
       )}
     </View>
+  );
+}
+
+/** Reveal the answer, count it as a miss, and save the word for a deep dive. */
+function DontKnow({ item, onResult }: { item: Exercise["item"]; onResult: (r: Result) => void }) {
+  return (
+    <Button
+      title="Don't know"
+      variant="ghost"
+      icon="help-circle-outline"
+      onPress={() => {
+        speakFrench(item.fr);
+        onResult({
+          correct: false,
+          dontKnow: true,
+          answer: `${item.fr} — ${item.en}`,
+          note: "Saved to your study list for a deep dive.",
+        });
+      }}
+    />
   );
 }
 

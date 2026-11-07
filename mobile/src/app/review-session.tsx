@@ -33,6 +33,7 @@ export default function ReviewSession() {
 
   return (
     <Session
+      title="Review"
       exercises={exercises}
       onFinish={async ({ firstTry, xp }) => {
         await api

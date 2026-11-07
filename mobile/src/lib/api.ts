@@ -9,6 +9,11 @@ export interface Item {
   learned?: boolean;
 }
 
+export interface StudyItem extends Item {
+  cleanRuns: number;
+  misses: number;
+}
+
 export interface LessonSummary {
   id: string;
   title: string;
@@ -31,6 +36,7 @@ export interface Stats {
   totalXp: number;
   learned: number;
   due: number;
+  study: number;
   week: { day: string; xp: number }[];
 }
 
@@ -79,6 +85,14 @@ export const api = {
     request("/api/review", { method: "POST", body: JSON.stringify({ ...body, day: localDay() }) }),
   items: () => request<{ items: Item[] }>("/api/items"),
   stats: () => request<Stats>(`/api/stats?today=${localDay()}`),
+  study: () => request<{ items: StudyItem[]; pool: Item[]; graduateAt: number }>("/api/study"),
+  addToStudy: (itemId: string) => request("/api/study", { method: "POST", body: JSON.stringify({ itemId }) }),
+  removeFromStudy: (itemId: string) => request(`/api/study/${encodeURIComponent(itemId)}`, { method: "DELETE" }),
+  submitStudy: (body: { xp: number; results: { itemId: string; clean: boolean }[] }) =>
+    request<{ graduated: string[] }>("/api/study/results", {
+      method: "POST",
+      body: JSON.stringify({ ...body, day: localDay() }),
+    }),
 
   async transcribe(uri: string): Promise<string> {
     const form = new FormData();

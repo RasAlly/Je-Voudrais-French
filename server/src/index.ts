@@ -159,6 +159,65 @@ app.post("/api/review", async (req, res) => {
   res.json({ ok: true });
 });
 
+// ---- Study list ("don't know" words) --------------------------------------
+
+/** Clean deep dives needed before a word graduates off the study list. */
+const STUDY_GRADUATE_RUNS = 2;
+
+app.get("/api/study", async (_req, res) => {
+  const { rows } = await getDb().query<{ item_id: string; clean_runs: number; misses: number }>(
+    `SELECT item_id, clean_runs, misses FROM study_list ORDER BY added_at DESC`,
+  );
+  const items = rows
+    .filter((r) => itemsById.has(r.item_id))
+    .map((r) => ({ ...itemsById.get(r.item_id)!, cleanRuns: r.clean_runs, misses: r.misses }));
+  res.json({ items, pool: [...itemsById.values()], graduateAt: STUDY_GRADUATE_RUNS });
+});
+
+app.post("/api/study", async (req, res) => {
+  const itemId = req.body?.itemId;
+  if (!itemsById.has(itemId)) {
+    res.status(400).json({ error: "unknown item" });
+    return;
+  }
+  // Re-adding a word resets its progress toward graduation.
+  await getDb().query(
+    `INSERT INTO study_list (item_id) VALUES ($1)
+     ON CONFLICT (item_id) DO UPDATE SET misses = study_list.misses + 1, clean_runs = 0`,
+    [itemId],
+  );
+  res.json({ ok: true });
+});
+
+app.delete("/api/study/:itemId", async (req, res) => {
+  await getDb().query(`DELETE FROM study_list WHERE item_id = $1`, [req.params.itemId]);
+  res.json({ ok: true });
+});
+
+/** Results of a deep dive: clean = every exercise on that word right the first time. */
+app.post("/api/study/results", async (req, res) => {
+  const { results = [], xp = 0, day } = req.body ?? {};
+  const db = getDb();
+  const graduated: string[] = [];
+  for (const r of results as { itemId: string; clean: boolean }[]) {
+    if (!itemsById.has(r.itemId)) continue;
+    if (!r.clean) {
+      await db.query(`UPDATE study_list SET clean_runs = 0 WHERE item_id = $1`, [r.itemId]);
+      continue;
+    }
+    const { rows } = await db.query<{ clean_runs: number }>(
+      `UPDATE study_list SET clean_runs = clean_runs + 1 WHERE item_id = $1 RETURNING clean_runs`,
+      [r.itemId],
+    );
+    if (rows[0] && rows[0].clean_runs >= STUDY_GRADUATE_RUNS) {
+      await db.query(`DELETE FROM study_list WHERE item_id = $1`, [r.itemId]);
+      graduated.push(r.itemId);
+    }
+  }
+  await addXp(isDay(day) ? day : todayUtc(), xp);
+  res.json({ ok: true, graduated });
+});
+
 // ---- Stats ----------------------------------------------------------------
 
 app.get("/api/stats", async (req, res) => {
@@ -192,6 +251,7 @@ app.get("/api/stats", async (req, res) => {
     `SELECT COUNT(*) AS learned, COUNT(*) FILTER (WHERE due_at <= now()) AS due FROM cards`,
   );
   const totalXp = days.rows.reduce((s, d) => s + Number(d.xp), 0);
+  const study = await db.query<{ n: string }>(`SELECT COUNT(*) AS n FROM study_list`);
 
   res.json({
     streak,
@@ -199,6 +259,7 @@ app.get("/api/stats", async (req, res) => {
     totalXp,
     learned: Number(totals.rows[0]?.learned ?? 0),
     due: Number(totals.rows[0]?.due ?? 0),
+    study: Number(study.rows[0]?.n ?? 0),
     week,
   });
 });

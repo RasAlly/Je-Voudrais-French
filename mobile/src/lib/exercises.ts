@@ -5,6 +5,7 @@ export type Exercise =
   | { kind: "choose_en"; item: Item; options: string[] } // see/hear French → pick English
   | { kind: "listen_choose"; item: Item; options: string[] } // hear only → pick French
   | { kind: "type_fr"; item: Item } // see English → type French
+  | { kind: "dictation"; item: Item } // hear French → type it
   | { kind: "arrange"; item: Item; bank: string[] } // see English → build French from tiles
   | { kind: "speak"; item: Item }; // say the French out loud
 
@@ -83,3 +84,31 @@ export function buildReview(items: Item[], pool: Item[]): Exercise[] {
     return makeExercise(kind, item, pool);
   });
 }
+
+/**
+ * Deep dive for study-list words: every word gets the full ladder, from
+ * recognition up to production, so weak spots get attacked from all sides.
+ */
+export function buildDeepDive(items: Item[], pool: Item[]): Exercise[] {
+  const out: Exercise[] = [];
+  for (const item of shuffle(items)) {
+    out.push({ kind: "intro", item });
+    out.push(makeExercise("choose_en", item, pool));
+    out.push(makeExercise("listen_choose", item, pool));
+    out.push(makeExercise("dictation", item, pool));
+    if (wordCount(item.fr) >= 2) out.push(makeExercise("arrange", item, pool));
+    out.push(makeExercise("type_fr", item, pool));
+    out.push(makeExercise("speak", item, pool));
+  }
+  return out;
+}
+
+export const KIND_LABELS: Record<Exercise["kind"], string> = {
+  intro: "New word",
+  choose_en: "Meaning",
+  listen_choose: "Listening",
+  type_fr: "Translate",
+  dictation: "Dictation",
+  arrange: "Build the sentence",
+  speak: "Speaking",
+};

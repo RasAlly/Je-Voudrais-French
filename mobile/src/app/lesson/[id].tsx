@@ -8,12 +8,16 @@ import { buildLesson, type Exercise } from "../../lib/exercises";
 export default function LessonScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const [exercises, setExercises] = useState<Exercise[] | null>(null);
+  const [title, setTitle] = useState("Lesson");
   const [error, setError] = useState<string | null>(null);
 
   const load = () => {
     api
       .lesson(id)
-      .then(({ lesson, pool }) => setExercises(buildLesson(lesson.items, pool)))
+      .then(({ lesson, pool }) => {
+        setTitle(lesson.title);
+        setExercises(buildLesson(lesson.items, pool));
+      })
       .catch((e) => setError(e.message));
   };
   useEffect(load, [id]);
@@ -23,6 +27,7 @@ export default function LessonScreen() {
 
   return (
     <Session
+      title={title}
       exercises={exercises}
       onFinish={async ({ firstTry, score, xp }) => {
         await api

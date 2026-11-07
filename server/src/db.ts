@@ -55,6 +55,13 @@ async function migrate() {
       best_score      INTEGER NOT NULL DEFAULT 0,
       last_completed  TIMESTAMPTZ
     )`,
+    // Words the learner marked "don't know" — studied in deep-dive sessions.
+    `CREATE TABLE IF NOT EXISTS study_list (
+      item_id     TEXT PRIMARY KEY,
+      added_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+      misses      INTEGER NOT NULL DEFAULT 1,
+      clean_runs  INTEGER NOT NULL DEFAULT 0
+    )`,
     `CREATE TABLE IF NOT EXISTS activity (
       day  DATE PRIMARY KEY,
       xp   INTEGER NOT NULL DEFAULT 0

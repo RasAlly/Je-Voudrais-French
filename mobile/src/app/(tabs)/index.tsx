@@ -42,6 +42,16 @@ export default function LearnScreen() {
           </Pressable>
         )}
 
+        {data.stats.study > 0 && (
+          <Pressable style={s.studyBanner} onPress={() => router.push("/study-session")}>
+            <Ionicons name="bookmark" size={18} color={colors.primary} />
+            <Text style={s.studyText}>
+              Deep dive · {data.stats.study} {data.stats.study === 1 ? "word" : "words"} on your study list
+            </Text>
+            <Ionicons name="chevron-forward" size={18} color={colors.primary} />
+          </Pressable>
+        )}
+
         {data.units.map((unit, ui) => (
           <View key={unit.id} style={s.unit}>
             <Text style={s.unitLabel}>Unité {ui + 1}</Text>
@@ -107,6 +117,16 @@ const s = StyleSheet.create({
     padding: space.md,
     borderRadius: radius.md,
   },
+  studyBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: space.sm,
+    backgroundColor: colors.primarySoft,
+    padding: space.md,
+    borderRadius: radius.md,
+    marginTop: -space.sm,
+  },
+  studyText: { flex: 1, color: colors.primaryDark, fontSize: 15, fontWeight: "600" },
   dueText: { flex: 1, color: colors.onPrimary, fontSize: 16, fontWeight: "600" },
   unit: { gap: 2 },
   unitLabel: { fontSize: 12, letterSpacing: 2, textTransform: "uppercase", color: colors.textMuted, fontWeight: "600" },
