@@ -5,6 +5,11 @@ import { initDb, getDb } from "./db.js";
 import { curriculum, itemsById, lessonsById } from "./curriculum.js";
 import { schedule, type Grade, type CardState } from "./srs.js";
 
+// Load server/.env for local development (Railway provides real env vars instead).
+try {
+  process.loadEnvFile(".env");
+} catch {}
+
 const app = express();
 app.use(cors());
 app.use(express.json());
