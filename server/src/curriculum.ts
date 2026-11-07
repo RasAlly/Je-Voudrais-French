@@ -25,6 +25,8 @@ export interface Lesson {
 export interface Unit {
   id: string;
   title: string;
+  /** English translation of the title */
+  en: string;
   lessons: Lesson[];
 }
 
@@ -32,6 +34,7 @@ export const curriculum: Unit[] = [
   {
     id: "u1",
     title: "Les bases",
+    en: "The basics",
     lessons: [
       {
         id: "greetings",
@@ -68,6 +71,7 @@ export const curriculum: Unit[] = [
   {
     id: "u2",
     title: "Se présenter",
+    en: "Introducing yourself",
     lessons: [
       {
         id: "intro",
@@ -105,6 +109,7 @@ export const curriculum: Unit[] = [
   {
     id: "u3",
     title: "Au café",
+    en: "At the café",
     lessons: [
       {
         id: "cafe",
@@ -140,6 +145,7 @@ export const curriculum: Unit[] = [
   {
     id: "u4",
     title: "En ville",
+    en: "In town",
     lessons: [
       {
         id: "directions",

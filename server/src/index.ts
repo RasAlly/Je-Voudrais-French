@@ -72,6 +72,7 @@ app.get("/api/course", async (_req, res) => {
   const units = curriculum.map((u) => ({
     id: u.id,
     title: u.title,
+    en: u.en,
     lessons: u.lessons.map((l) => {
       const p = progress.get(l.id);
       const unlocked = previousDone;

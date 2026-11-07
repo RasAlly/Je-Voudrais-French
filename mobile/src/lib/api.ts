@@ -28,6 +28,7 @@ export interface LessonSummary {
 export interface Unit {
   id: string;
   title: string;
+  en?: string;
   lessons: LessonSummary[];
 }
 

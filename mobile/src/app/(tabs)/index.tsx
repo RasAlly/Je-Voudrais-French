@@ -55,7 +55,10 @@ export default function LearnScreen() {
         {data.units.map((unit, ui) => (
           <View key={unit.id} style={s.unit}>
             <Text style={s.unitLabel}>Unité {ui + 1}</Text>
-            <Text style={s.unitTitle}>{unit.title}</Text>
+            <View style={s.unitTitleRow}>
+              <Text style={s.unitTitle}>{unit.title}</Text>
+              {unit.en && <Text style={s.unitEn}>{unit.en}</Text>}
+            </View>
             <View style={s.lessons}>
               {unit.lessons.map((l) => (
                 <LessonRow key={l.id} lesson={l} />
@@ -130,7 +133,9 @@ const s = StyleSheet.create({
   dueText: { flex: 1, color: colors.onPrimary, fontSize: 16, fontWeight: "600" },
   unit: { gap: 2 },
   unitLabel: { fontSize: 12, letterSpacing: 2, textTransform: "uppercase", color: colors.textMuted, fontWeight: "600" },
-  unitTitle: { fontFamily: fonts.serif, fontSize: 24, color: colors.text, marginBottom: space.sm },
+  unitTitleRow: { flexDirection: "row", alignItems: "baseline", flexWrap: "wrap", columnGap: space.sm, marginBottom: space.sm },
+  unitTitle: { fontFamily: fonts.serif, fontSize: 24, color: colors.text },
+  unitEn: { fontSize: 14, color: colors.textMuted },
   lessons: { gap: space.sm },
   lesson: {
     flexDirection: "row",
