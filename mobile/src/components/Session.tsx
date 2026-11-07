@@ -3,7 +3,7 @@ import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
 import { useState } from "react";
 import { KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import type { Exercise } from "../lib/exercises";
 import { stopSpeaking } from "../lib/speech";
 import { colors, fonts, radius, space } from "../theme";
@@ -22,7 +22,15 @@ type Props = {
   onFinish: (summary: SessionSummary) => Promise<void>;
 };
 
+/** Leave the session; falls back to home if there's no screen to go back to (e.g. after a reload). */
+function exit() {
+  stopSpeaking();
+  if (router.canGoBack()) router.back();
+  else router.replace("/");
+}
+
 export function Session({ exercises, onFinish }: Props) {
+  const insets = useSafeAreaInsets();
   const [queue, setQueue] = useState<Exercise[]>(exercises);
   const [index, setIndex] = useState(0);
   const [feedback, setFeedback] = useState<Result | null>(null);
@@ -85,7 +93,7 @@ export function Session({ exercises, onFinish }: Props) {
             } finally {
               setSaving(false);
             }
-            router.back();
+            exit();
           }}
         />
       </SafeAreaView>
@@ -95,9 +103,16 @@ export function Session({ exercises, onFinish }: Props) {
   const common = { locked: !!feedback, onResult: handleResult };
 
   return (
-    <SafeAreaView style={s.screen}>
-      <View style={s.header}>
-        <Pressable onPress={() => (stopSpeaking(), router.back())} hitSlop={12}>
+    <SafeAreaView style={s.screen} edges={["bottom", "left", "right"]}>
+      {/* Explicit top inset: keeps the close button clear of the notch / Dynamic Island. */}
+      <View style={[s.header, { paddingTop: Math.max(insets.top, 24) + space.md }]}>
+        <Pressable
+          onPress={exit}
+          hitSlop={16}
+          accessibilityRole="button"
+          accessibilityLabel="Close lesson"
+          style={({ pressed }) => [s.close, pressed && { backgroundColor: colors.surfaceAlt }]}
+        >
           <Ionicons name="close" size={28} color={colors.textMuted} />
         </Pressable>
         <ProgressBar value={progress} />
@@ -145,7 +160,8 @@ function Stat({ label, value }: { label: string; value: string }) {
 
 const s = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bg, paddingHorizontal: space.lg, paddingBottom: space.md },
-  header: { flexDirection: "row", alignItems: "center", gap: space.md, paddingVertical: space.md },
+  header: { flexDirection: "row", alignItems: "center", gap: space.md, paddingBottom: space.md },
+  close: { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center", marginLeft: -8 },
   body: { flex: 1, paddingTop: space.md },
   feedback: {
     position: "absolute",

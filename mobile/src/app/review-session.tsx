@@ -27,7 +27,7 @@ export default function ReviewSession() {
       <Center>
         <Text style={{ fontFamily: fonts.serif, fontSize: 26, color: colors.text }}>Rien à réviser</Text>
         <Text style={{ color: colors.textMuted }}>Nothing is due. Come back later!</Text>
-        <Button title="Back" variant="secondary" onPress={() => router.back()} />
+        <Button title="Back" variant="secondary" onPress={() => (router.canGoBack() ? router.back() : router.replace("/"))} />
       </Center>
     );
 
