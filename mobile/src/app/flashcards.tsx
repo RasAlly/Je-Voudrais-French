@@ -103,8 +103,11 @@ export default function FlashcardsScreen() {
   const answer = (knewIt: boolean) => {
     Haptics.selectionAsync().catch(() => {});
     if (!knewIt) {
+      // Stay on this card: flip it back to the front so you can try again.
       setAgain((a) => ({ ...a, [card!.id]: true }));
-      setQueue((q) => [...q!, card!]); // see it again at the end
+      Animated.spring(flip, { toValue: 0, friction: 8, tension: 60, useNativeDriver: true }).start();
+      setFlipped(false);
+      return;
     }
     flip.setValue(0);
     setFlipped(false);
@@ -129,6 +132,7 @@ export default function FlashcardsScreen() {
 
       <Pressable style={s.cardArea} onPress={doFlip} accessibilityHint="Flips the card">
         <Animated.View style={[s.card, { transform: [{ perspective: 1000 }, { rotateY: front }] }]}>
+          {again[card!.id] && <Text style={s.retry}>Try again</Text>}
           <Face item={card!} french={frenchFirst} />
         </Animated.View>
         <Animated.View style={[s.card, s.cardBack, { transform: [{ perspective: 1000 }, { rotateY: back }] }]}>
@@ -204,6 +208,14 @@ const s = StyleSheet.create({
     justifyContent: "center",
   },
   note: { fontSize: 14, color: colors.primaryDark, textAlign: "center" },
+  retry: {
+    position: "absolute",
+    bottom: space.lg,
+    alignSelf: "center",
+    fontSize: 13,
+    fontWeight: "600",
+    color: colors.error,
+  },
   row: { flexDirection: "row", gap: space.sm },
   doneBox: { flex: 1, alignItems: "center", justifyContent: "center", gap: space.sm },
   doneTitle: { fontSize: 32, fontFamily: fonts.serif, color: colors.text },
