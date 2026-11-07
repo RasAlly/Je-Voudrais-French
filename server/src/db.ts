@@ -1,0 +1,64 @@
+import pg from "pg";
+
+/**
+ * Minimal query interface shared by node-postgres (production / Railway)
+ * and PGlite (embedded Postgres for local development, no install needed).
+ */
+export interface Db {
+  query<T = any>(sql: string, params?: unknown[]): Promise<{ rows: T[] }>;
+}
+
+let db: Db;
+
+export async function initDb(): Promise<Db> {
+  if (process.env.DATABASE_URL) {
+    const isInternal = process.env.DATABASE_URL.includes(".railway.internal");
+    const pool = new pg.Pool({
+      connectionString: process.env.DATABASE_URL,
+      // Railway's public proxy URL requires SSL; the private network does not.
+      ssl: isInternal || process.env.DATABASE_URL.includes("localhost") ? false : { rejectUnauthorized: false },
+    });
+    db = { query: (sql, params) => pool.query(sql, params as any[]) as any };
+    console.log("DB: Postgres (DATABASE_URL)");
+  } else {
+    const { PGlite } = await import("@electric-sql/pglite");
+    const { mkdirSync } = await import("node:fs");
+    mkdirSync("./.data", { recursive: true });
+    const lite = new PGlite("./.data/pglite");
+    db = { query: (sql, params) => lite.query(sql, params as any[]) as any };
+    console.log("DB: embedded PGlite at ./.data/pglite");
+  }
+  await migrate();
+  return db;
+}
+
+export function getDb(): Db {
+  if (!db) throw new Error("DB not initialised");
+  return db;
+}
+
+async function migrate() {
+  // Single-user app: no users table, progress is global.
+  const statements = [
+    `CREATE TABLE IF NOT EXISTS cards (
+      item_id        TEXT PRIMARY KEY,
+      ease           REAL NOT NULL DEFAULT 2.5,
+      interval_days  REAL NOT NULL DEFAULT 0,
+      reps           INTEGER NOT NULL DEFAULT 0,
+      lapses         INTEGER NOT NULL DEFAULT 0,
+      due_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
+      last_reviewed  TIMESTAMPTZ
+    )`,
+    `CREATE TABLE IF NOT EXISTS lesson_progress (
+      lesson_id       TEXT PRIMARY KEY,
+      completions     INTEGER NOT NULL DEFAULT 0,
+      best_score      INTEGER NOT NULL DEFAULT 0,
+      last_completed  TIMESTAMPTZ
+    )`,
+    `CREATE TABLE IF NOT EXISTS activity (
+      day  DATE PRIMARY KEY,
+      xp   INTEGER NOT NULL DEFAULT 0
+    )`,
+  ];
+  for (const s of statements) await db.query(s);
+}

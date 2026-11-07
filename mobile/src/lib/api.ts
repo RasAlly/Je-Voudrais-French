@@ -1,0 +1,95 @@
+import Constants from "expo-constants";
+
+export interface Item {
+  id: string;
+  fr: string;
+  en: string;
+  alt?: string[];
+  note?: string;
+  learned?: boolean;
+}
+
+export interface LessonSummary {
+  id: string;
+  title: string;
+  subtitle: string;
+  itemCount: number;
+  completions: number;
+  bestScore: number;
+  unlocked: boolean;
+}
+
+export interface Unit {
+  id: string;
+  title: string;
+  lessons: LessonSummary[];
+}
+
+export interface Stats {
+  streak: number;
+  xpToday: number;
+  totalXp: number;
+  learned: number;
+  due: number;
+  week: { day: string; xp: number }[];
+}
+
+/**
+ * API base URL. Set EXPO_PUBLIC_API_URL to your Railway URL in mobile/.env.
+ * In development without it, we talk to the server on the same machine that
+ * runs Metro (works from a phone on the same Wi-Fi).
+ */
+function resolveBaseUrl() {
+  if (process.env.EXPO_PUBLIC_API_URL) return process.env.EXPO_PUBLIC_API_URL.replace(/\/$/, "");
+  const host = Constants.expoConfig?.hostUri?.split(":")[0] ?? "localhost";
+  return `http://${host}:3000`;
+}
+
+export const BASE_URL = resolveBaseUrl();
+const TOKEN = process.env.EXPO_PUBLIC_APP_TOKEN ?? "";
+
+async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const headers: Record<string, string> = { "x-app-token": TOKEN, ...(init.headers as any) };
+  if (init.body && typeof init.body === "string") headers["content-type"] = "application/json";
+  const res = await fetch(`${BASE_URL}${path}`, { ...init, headers });
+  if (!res.ok) {
+    let msg = `${res.status}`;
+    try {
+      msg = (await res.json()).error ?? msg;
+    } catch {}
+    throw new Error(msg);
+  }
+  return res.json();
+}
+
+/** Local calendar day, so streaks follow your timezone rather than the server's. */
+export function localDay(d = new Date()) {
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
+export const api = {
+  course: () => request<{ units: Unit[] }>("/api/course"),
+  lesson: (id: string) =>
+    request<{ lesson: { id: string; title: string; items: Item[] }; pool: Item[] }>(`/api/lessons/${id}`),
+  completeLesson: (id: string, body: { score: number; xp: number; results: { itemId: string; correct: boolean }[] }) =>
+    request(`/api/lessons/${id}/complete`, { method: "POST", body: JSON.stringify({ ...body, day: localDay() }) }),
+  review: () => request<{ items: Item[]; pool: Item[] }>("/api/review"),
+  submitReview: (body: { xp: number; results: { itemId: string; grade: number }[] }) =>
+    request("/api/review", { method: "POST", body: JSON.stringify({ ...body, day: localDay() }) }),
+  items: () => request<{ items: Item[] }>("/api/items"),
+  stats: () => request<Stats>(`/api/stats?today=${localDay()}`),
+
+  async transcribe(uri: string): Promise<string> {
+    const form = new FormData();
+    form.append("audio", { uri, name: "speech.m4a", type: "audio/m4a" } as any);
+    const res = await fetch(`${BASE_URL}/api/transcribe`, {
+      method: "POST",
+      headers: { "x-app-token": TOKEN },
+      body: form,
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error ?? `transcription failed (${res.status})`);
+    return data.text ?? "";
+  },
+};

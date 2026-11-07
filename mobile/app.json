@@ -1,0 +1,43 @@
+{
+  "expo": {
+    "name": "Je Voudrais",
+    "slug": "je-voudrais",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.rasally.jevoudrais",
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "Je Voudrais uses the microphone so you can practice speaking French."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#7A5235",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "package": "com.rasally.jevoudrais"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "Je Voudrais uses the microphone so you can practice speaking French."
+        }
+      ],
+      "expo-font",
+      "expo-asset"
+    ],
+    "scheme": "jevoudrais",
+    "backgroundColor": "#F4EDE3"
+  }
+}
