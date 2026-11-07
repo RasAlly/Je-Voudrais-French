@@ -1,9 +1,15 @@
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
+import { useEffect } from "react";
 import { SafeAreaProvider } from "react-native-safe-area-context";
+import { initAudio } from "../lib/speech";
 import { colors } from "../theme";
 
 export default function RootLayout() {
+  useEffect(() => {
+    initAudio();
+  }, []);
+
   return (
     <SafeAreaProvider>
       <StatusBar style="dark" />
