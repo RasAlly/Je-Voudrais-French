@@ -14,6 +14,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { MakeFlashcard } from "../../components/MakeFlashcard";
 import { Button, Chip, FrenchText, ScreenHeader, Segmented, SpeakButtons } from "../../components/ui";
 import { api } from "../../lib/api";
 import { gradeTyped, similarity } from "../../lib/compare";
@@ -247,9 +248,12 @@ export default function NumbersScreen() {
                 <Text style={[s.resultTitle, { color: result.correct ? colors.success : colors.error }]}>
                   {result.correct ? "Très bien !" : result.revealed ? "La réponse" : "Pas tout à fait"}
                 </Text>
-                <Pressable onPress={() => speakFrench(prompt.spoken)} hitSlop={8}>
-                  <Ionicons name="volume-high" size={22} color={colors.primary} />
-                </Pressable>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: space.md }}>
+                  <Pressable onPress={() => speakFrench(prompt.spoken)} hitSlop={8}>
+                    <Ionicons name="volume-high" size={22} color={colors.primary} />
+                  </Pressable>
+                  <MakeFlashcard word={{ fr: prompt.spoken, en: prompt.display }} />
+                </View>
               </View>
               <Text style={s.resultDisplay}>{prompt.display}</Text>
               <FrenchText size={20}>{prompt.spoken}</FrenchText>

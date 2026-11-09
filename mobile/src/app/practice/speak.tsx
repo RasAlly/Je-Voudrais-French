@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { SPEAK_PASS } from "../../components/Exercises";
+import { MakeFlashcard } from "../../components/MakeFlashcard";
 import { ErrorState, Loading } from "../../components/States";
 import { Button, FrenchText, ScreenHeader, SpeakButtons } from "../../components/ui";
 import type { Item } from "../../lib/api";
@@ -83,7 +84,10 @@ export default function SpeakScreen() {
           <FrenchText size={32}>{item.fr}</FrenchText>
         )}
         <Text style={s.en}>{item.en}</Text>
-        <SpeakButtons text={item.fr} />
+        <View style={{ flexDirection: "row", alignItems: "center", gap: space.md }}>
+          <SpeakButtons text={item.fr} />
+          <MakeFlashcard item={item} />
+        </View>
       </View>
 
       <View style={s.center}>

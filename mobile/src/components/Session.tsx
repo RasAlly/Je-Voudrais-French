@@ -9,6 +9,7 @@ import { type Exercise, KIND_LABELS } from "../lib/exercises";
 import { stopSpeaking } from "../lib/speech";
 import { colors, fonts, radius, space } from "../theme";
 import { Arrange, ChooseEn, Intro, ListenChoose, type Result, Speak, TypeFr } from "./Exercises";
+import { MakeFlashcard } from "./MakeFlashcard";
 import { Button, ProgressBar } from "./ui";
 
 export type SessionSummary = {
@@ -24,6 +25,8 @@ type Props = {
   title: string;
   exercises: Exercise[];
   onFinish: (summary: SessionSummary) => Promise<void>;
+  /** Show the "make flashcard" button (off in study deep dives — those words are already on the list). */
+  flashcards?: boolean;
 };
 
 type StepStatus = "seen" | "correct" | "wrong";
@@ -45,7 +48,7 @@ function exit() {
   else router.replace("/");
 }
 
-export function Session({ title, exercises, onFinish }: Props) {
+export function Session({ title, exercises, onFinish, flashcards = true }: Props) {
   const insets = useSafeAreaInsets();
   const [queue, setQueue] = useState<Exercise[]>(exercises);
   const [index, setIndex] = useState(0);
@@ -131,6 +134,7 @@ export function Session({ title, exercises, onFinish }: Props) {
       <View style={[s.header, { paddingTop: Math.max(insets.top, 24) + space.md }]}>
         <IconButton icon="close" label="Close lesson" onPress={exit} />
         <ProgressBar value={progress} />
+        {flashcards && <MakeFlashcard item={ex.item} />}
         <IconButton icon="menu" label="Lesson contents" onPress={() => setTocOpen(true)} />
       </View>
 

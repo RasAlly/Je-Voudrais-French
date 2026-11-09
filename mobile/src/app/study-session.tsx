@@ -46,6 +46,7 @@ export default function StudySession() {
 
   return (
     <Session
+      flashcards={false}
       title="Deep dive"
       exercises={exercises}
       onFinish={async ({ firstTry, missed }) => {

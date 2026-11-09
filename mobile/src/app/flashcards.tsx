@@ -27,7 +27,7 @@ function exit() {
 }
 
 export default function FlashcardsScreen() {
-  const { deck = "learned", dir = "fr" } = useLocalSearchParams<{ deck?: Deck; dir?: Direction }>();
+  const { deck = "study", dir = "fr" } = useLocalSearchParams<{ deck?: Deck; dir?: Direction }>();
   const insets = useSafeAreaInsets();
   const [queue, setQueue] = useState<Item[] | null>(null);
   const [error, setError] = useState<string | null>(null);

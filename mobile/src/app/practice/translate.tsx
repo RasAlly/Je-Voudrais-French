@@ -149,8 +149,8 @@ export default function TranslateScreen() {
                   style={{ flex: 1 }}
                 />
                 <Button
-                  title={current.studying ? "On study list" : "Study list"}
-                  icon={current.studying ? "checkmark" : "school-outline"}
+                  title={current.studying ? "Flashcard made" : "Make flashcard"}
+                  icon={current.studying ? "checkmark" : "albums-outline"}
                   variant="secondary"
                   loading={saving === "study"}
                   disabled={current.studying}

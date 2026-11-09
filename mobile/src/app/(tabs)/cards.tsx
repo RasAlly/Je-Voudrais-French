@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useState } from "react";
-import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ErrorState, Loading } from "../../components/States";
 import { Button, Card, Chip, Segmented } from "../../components/ui";
@@ -19,7 +19,7 @@ export default function CardsScreen() {
       api.study(),
       api.course(),
     ]);
-    return { stats, items, learned: items.filter((i) => i.learned), study, units };
+    return { stats, items, study, units };
   });
 
   if (error) return <ErrorState message={error} onRetry={reload} />;
@@ -28,54 +28,38 @@ export default function CardsScreen() {
 
   return (
     <SafeAreaView style={s.screen} edges={["top"]}>
-      <FlatList
-        data={data.learned}
-        keyExtractor={(i) => i.id}
-        contentContainerStyle={s.content}
-        ListHeaderComponent={
-          <View style={{ gap: space.md, marginBottom: space.md }}>
-            <Text style={s.title}>Cartes</Text>
-            <Card style={{ gap: space.md, alignItems: "center" }}>
-              <Text style={s.big}>{data.stats.due}</Text>
-              <Text style={s.muted}>{data.stats.due === 1 ? "card due" : "cards due"} today</Text>
-              <Button
-                title={data.stats.due ? "Start review" : "All caught up"}
-                disabled={!data.stats.due}
-                onPress={() => router.push("/review-session")}
-                style={{ alignSelf: "stretch" }}
-              />
-            </Card>
-
-            <Flashcards
-              decks={[
-                { id: "due", label: "Due" },
-                { id: "learned", label: "My words" },
-                { id: "study", label: "Study list" },
-                { id: "saved", label: "Saved" },
-                ...data.units.map((u) => ({ id: `unit:${u.id}` as Deck, label: u.en ?? u.title })),
-              ].map((d) => ({ ...d, count: filterDeck(d.id as Deck, data.items, data.study.items).length }))}
+      <ScrollView contentContainerStyle={s.content}>
+        <View style={{ gap: space.md, marginBottom: space.md }}>
+          <Text style={s.title}>Cartes</Text>
+          <Card style={{ gap: space.md, alignItems: "center" }}>
+            <Text style={s.big}>{data.stats.due}</Text>
+            <Text style={s.muted}>{data.stats.due === 1 ? "card due" : "cards due"} today</Text>
+            <Button
+              title={data.stats.due ? "Start review" : "All caught up"}
+              disabled={!data.stats.due}
+              onPress={() => router.push("/review-session")}
+              style={{ alignSelf: "stretch" }}
             />
+          </Card>
 
-            <StudyList items={data.study.items} graduateAt={data.study.graduateAt} onChange={reload} />
+          <Flashcards
+            decks={[
+              { id: "study", label: "Study list" },
+              { id: "saved", label: "Saved" },
+              ...data.units.map((u) => ({ id: `unit:${u.id}` as Deck, label: u.en ?? u.title })),
+            ].map((d) => ({ ...d, count: filterDeck(d.id as Deck, data.items, data.study.items).length }))}
+          />
 
-            <Text style={s.section}>Your words · {data.learned.length}</Text>
-          </View>
-        }
-        ListEmptyComponent={<Text style={s.muted}>Finish a lesson to start building your deck.</Text>}
-        renderItem={({ item }) => (
-          <Pressable onPress={() => speakFrench(item.fr)} style={({ pressed }) => [s.row, pressed && { opacity: 0.6 }]}>
-            <Text style={s.fr}>{item.fr}</Text>
-            <Text style={s.en}>{item.en}</Text>
-          </Pressable>
-        )}
-      />
+          <StudyList items={data.study.items} graduateAt={data.study.graduateAt} onChange={reload} />
+        </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
 
 /** Deck + direction picker that launches a flashcard session. */
 function Flashcards({ decks }: { decks: { id: string; label: string; count: number }[] }) {
-  const [deck, setDeck] = useState<string>(() => decks.find((d) => d.count > 0)?.id ?? "learned");
+  const [deck, setDeck] = useState<string>(() => decks.find((d) => d.count > 0)?.id ?? "study");
   const [dir, setDir] = useState<Direction>("fr");
   const selected = decks.find((d) => d.id === deck);
   return (
@@ -152,7 +136,12 @@ function StudyList({ items, graduateAt, onChange }: { items: StudyItem[]; gradua
           <Pressable
             hitSlop={8}
             accessibilityLabel={`Remove ${it.fr}`}
-            onPress={() => api.removeFromStudy(it.id).then(onChange).catch(() => {})}
+            onPress={() =>
+              api
+                .removeFromStudy(it.id)
+                .then(onChange)
+                .catch(() => {})
+            }
           >
             <Ionicons name="close-circle-outline" size={24} color={colors.locked} />
           </Pressable>
