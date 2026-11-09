@@ -22,6 +22,13 @@ const DRILLS: Drill[] = [
     href: "/practice/translate",
   },
   {
+    title: "Article du jour",
+    en: "Daily article",
+    description: "Today's most-read French Wikipedia article — tap any word",
+    icon: "newspaper-outline",
+    href: "/practice/article",
+  },
+  {
     title: "Les nombres",
     en: "Numbers",
     description: "Count to a million, plus prices, times and phone numbers",

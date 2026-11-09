@@ -78,6 +78,37 @@ export function MakeFlashcard({ item, word, variant = "icon", style }: Props) {
   );
 }
 
+/** "Study list" button for a new word/phrase (adds it to the deep-dive study list). */
+export function AddToStudy({ word, style }: { word: Word; style?: ViewStyle }) {
+  const [addedKey, setAddedKey] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const added = addedKey === word.fr;
+  return (
+    <Button
+      title={added ? "On study list" : failed ? "Try again" : "Study list"}
+      icon={added ? "checkmark" : "school-outline"}
+      variant="secondary"
+      loading={busy}
+      disabled={added}
+      style={style}
+      onPress={async () => {
+        setBusy(true);
+        setFailed(false);
+        try {
+          await api.saveWord({ ...word, to: "study" });
+          setAddedKey(word.fr);
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+        } catch {
+          setFailed(true);
+        } finally {
+          setBusy(false);
+        }
+      }}
+    />
+  );
+}
+
 const s = StyleSheet.create({
   icon: {
     width: 40,

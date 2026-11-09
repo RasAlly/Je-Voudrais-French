@@ -82,6 +82,18 @@ async function migrate() {
       item_id  TEXT PRIMARY KEY,
       made_at  TIMESTAMPTZ NOT NULL DEFAULT now()
     )`,
+    // One Daily Article per day (JSON blob from article.ts).
+    `CREATE TABLE IF NOT EXISTS articles (
+      day         TEXT PRIMARY KEY,
+      title       TEXT NOT NULL,
+      data        TEXT NOT NULL,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+    )`,
+    // Cached word look-ups from the article reader (word + sentence → meaning).
+    `CREATE TABLE IF NOT EXISTS glosses (
+      key   TEXT PRIMARY KEY,
+      data  TEXT NOT NULL
+    )`,
     `CREATE TABLE IF NOT EXISTS activity (
       day  DATE PRIMARY KEY,
       xp   INTEGER NOT NULL DEFAULT 0

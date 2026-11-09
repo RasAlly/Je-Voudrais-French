@@ -29,6 +29,31 @@ export interface Translation {
   note: string;
 }
 
+export type ArticleBlock = { type: "h"; text: string } | { type: "p"; sentences: string[][] };
+
+export interface Article {
+  day: string;
+  title: string;
+  description: string;
+  url: string;
+  thumbnail: string | null;
+  views: number;
+  words: number;
+  truncated: boolean;
+  /** Paragraphs → sentences → tokens (words and the text between them) */
+  blocks: ArticleBlock[];
+}
+
+export interface Gloss {
+  word: string;
+  /** Dictionary form, e.g. "la famille", "s'installer" */
+  lemma: string;
+  en: string;
+  pos: string;
+  note: string;
+  flashcardEn: string;
+}
+
 export interface LessonSummary {
   id: string;
   title: string;
@@ -114,6 +139,13 @@ export const api = {
   /** Keep a new word/phrase as your own: make a flashcard (Saved) or add it to the study list. */
   saveWord: (word: { fr: string; en: string; note?: string; to: "saved" | "study" }) =>
     request<{ item: Item; existed: boolean }>("/api/custom-items", { method: "POST", body: JSON.stringify(word) }),
+  article: (day = localDay()) => request<Article>(`/api/article?day=${day}`),
+  articles: () =>
+    request<{ articles: { day: string; title: string; description: string; thumbnail: string | null }[] }>(
+      "/api/articles",
+    ),
+  gloss: (word: string, sentence: string) =>
+    request<Gloss>("/api/gloss", { method: "POST", body: JSON.stringify({ word, sentence }) }),
   submitStudy: (body: { xp: number; results: { itemId: string; clean: boolean }[] }) =>
     request<{ graduated: string[] }>("/api/study/results", {
       method: "POST",

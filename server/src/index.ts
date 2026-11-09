@@ -3,6 +3,7 @@ import cors from "cors";
 import multer from "multer";
 import { initDb, getDb } from "./db.js";
 import { randomUUID } from "node:crypto";
+import { buildDailyArticle } from "./article.js";
 import { curriculum, itemsById, lessonsById, registerCustomItem, unitOfItem } from "./curriculum.js";
 import { schedule, type Grade, type CardState } from "./srs.js";
 
@@ -34,6 +35,11 @@ app.use("/api", (req: Request, res: Response, next: NextFunction) => {
 
 const isDay = (s: unknown): s is string => typeof s === "string" && /^\d{4}-\d{2}-\d{2}$/.test(s);
 const todayUtc = () => new Date().toISOString().slice(0, 10);
+const shiftDay = (d: string, n: number) => {
+  const t = new Date(d + "T00:00:00Z");
+  t.setUTCDate(t.getUTCDate() + n);
+  return t.toISOString().slice(0, 10);
+};
 
 async function addXp(day: string, xp: number) {
   if (xp <= 0) return;
@@ -267,6 +273,46 @@ app.post("/api/study/results", async (req, res) => {
 
 // ---- Translator + saved words ---------------------------------------------
 
+/**
+ * Ask the Groq chat model for a JSON object. On failure, sends the error
+ * response itself and returns null.
+ */
+async function groqJson(system: string, user: string, res: Response): Promise<Record<string, any> | null> {
+  const key = process.env.GROQ_API_KEY;
+  if (!key) {
+    res.status(501).json({ error: "Not set up: add GROQ_API_KEY on the server" });
+    return null;
+  }
+  const r = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${key}`, "content-type": "application/json" },
+    body: JSON.stringify({
+      model: process.env.TRANSLATE_MODEL || "openai/gpt-oss-120b",
+      reasoning_effort: "low",
+      temperature: 0.2,
+      response_format: { type: "json_object" },
+      messages: [
+        { role: "system", content: system },
+        { role: "user", content: user },
+      ],
+    }),
+  });
+  if (!r.ok) {
+    console.error("groq chat failed", r.status, await r.text());
+    res
+      .status(r.status === 429 ? 429 : 502)
+      .json({ error: r.status === 429 ? "Translation limit reached — try again in a minute" : "translation failed" });
+    return null;
+  }
+  const data = (await r.json()) as { choices?: { message?: { content?: string } }[] };
+  try {
+    return JSON.parse(data.choices?.[0]?.message?.content ?? "");
+  } catch {
+    res.status(502).json({ error: "translation failed" });
+    return null;
+  }
+}
+
 const TRANSLATE_PROMPT = `You are a French–English translator for someone learning French.
 Detect whether the input is English or French and translate it into the other language.
 Use natural, everyday French (France). Keep the learner's register; for "you", prefer "tu" unless the input is clearly formal.
@@ -281,49 +327,22 @@ app.post("/api/translate", async (req, res) => {
     res.status(400).json({ error: "Type something to translate" });
     return;
   }
-  const key = process.env.GROQ_API_KEY;
-  if (!key) {
-    res.status(501).json({ error: "Translation isn't set up: add GROQ_API_KEY on the server" });
-    return;
-  }
-  const r = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${key}`, "content-type": "application/json" },
-    body: JSON.stringify({
-      model: process.env.TRANSLATE_MODEL || "openai/gpt-oss-120b",
-      reasoning_effort: "low",
-      temperature: 0.2,
-      response_format: { type: "json_object" },
-      messages: [
-        { role: "system", content: TRANSLATE_PROMPT },
-        { role: "user", content: text },
-      ],
-    }),
-  });
-  if (!r.ok) {
-    console.error("translate failed", r.status, await r.text());
-    res
-      .status(r.status === 429 ? 429 : 502)
-      .json({ error: r.status === 429 ? "Translation limit reached — try again in a minute" : "translation failed" });
-    return;
-  }
-  const data = (await r.json()) as { choices?: { message?: { content?: string } }[] };
-  try {
-    const out = JSON.parse(data.choices?.[0]?.message?.content ?? "{}");
-    const str = (v: unknown) => (typeof v === "string" ? v.trim() : "");
-    const fr = str(out.fr);
-    const en = str(out.en);
-    if (!fr || !en) throw new Error("incomplete");
-    res.json({
-      source: out.source === "fr" ? "fr" : "en",
-      fr,
-      en,
-      alternatives: Array.isArray(out.alternatives) ? out.alternatives.map(str).filter(Boolean).slice(0, 2) : [],
-      note: str(out.note),
-    });
-  } catch {
+  const out = await groqJson(TRANSLATE_PROMPT, text, res);
+  if (!out) return;
+  const str = (v: unknown) => (typeof v === "string" ? v.trim() : "");
+  const fr = str(out.fr);
+  const en = str(out.en);
+  if (!fr || !en) {
     res.status(502).json({ error: "translation failed" });
+    return;
   }
+  res.json({
+    source: out.source === "fr" ? "fr" : "en",
+    fr,
+    en,
+    alternatives: Array.isArray(out.alternatives) ? out.alternatives.map(str).filter(Boolean).slice(0, 2) : [],
+    note: str(out.note),
+  });
 });
 
 /** Keep a new word/phrase as your own item: make it a flashcard ("saved") or put it on the study list. */
@@ -354,6 +373,88 @@ app.post("/api/custom-items", async (req, res) => {
     );
   }
   res.json({ item, existed: !!existing });
+});
+
+// ---- Daily Article ----------------------------------------------------------
+
+/** Today's article (built from Wikipedia on first request of the day, then cached). */
+app.get("/api/article", async (req, res) => {
+  const day = isDay(req.query.day) ? req.query.day : todayUtc();
+  const db = getDb();
+  const found = await db.query<{ data: string }>(`SELECT data FROM articles WHERE day = $1`, [day]);
+  if (found.rows[0]) {
+    res.json(JSON.parse(found.rows[0].data));
+    return;
+  }
+  if (day > todayUtc() && day !== shiftDay(todayUtc(), 1)) {
+    res.status(400).json({ error: "That day hasn't happened yet" });
+    return;
+  }
+  const used = await db.query<{ title: string }>(`SELECT title FROM articles`);
+  try {
+    const article = await buildDailyArticle(day, new Set(used.rows.map((r) => r.title)));
+    await db.query(`INSERT INTO articles (day, title, data) VALUES ($1, $2, $3) ON CONFLICT (day) DO NOTHING`, [
+      day,
+      article.title,
+      JSON.stringify(article),
+    ]);
+    const saved = await db.query<{ data: string }>(`SELECT data FROM articles WHERE day = $1`, [day]);
+    res.json(JSON.parse(saved.rows[0].data));
+  } catch (e) {
+    console.error("daily article failed", e);
+    res.status(502).json({ error: "Couldn't load today's article from Wikipedia" });
+  }
+});
+
+/** Past articles, newest first. */
+app.get("/api/articles", async (_req, res) => {
+  const { rows } = await getDb().query<{ day: string; data: string }>(
+    `SELECT day, data FROM articles ORDER BY day DESC LIMIT 60`,
+  );
+  res.json({
+    articles: rows.map((r) => {
+      const a = JSON.parse(r.data);
+      return { day: r.day, title: a.title, description: a.description, thumbnail: a.thumbnail };
+    }),
+  });
+});
+
+const GLOSS_PROMPT = `You help an English speaker read French. Given a French word and the sentence it appears in, explain that word as used in this sentence.
+Reply with JSON only:
+{"lemma":"<dictionary form: nouns with article (le/la/l'/les), verbs in the infinitive, adjectives masculine singular; for names, the name>","en":"<short English meaning in this context>","pos":"<noun|verb|adjective|adverb|preposition|pronoun|determiner|conjunction|name|other>","note":"<one short English note: gender, or the verb form (e.g. 'passé composé, 3rd person singular'), or empty>","flashcard_en":"<English for the lemma, e.g. 'the actor' or 'to settle'>"}`;
+
+/** Meaning of one word in context (cached, so tapping a word twice is free). */
+app.post("/api/gloss", async (req, res) => {
+  const word = String(req.body?.word ?? "").trim().slice(0, 60);
+  const sentence = String(req.body?.sentence ?? "").trim().slice(0, 600);
+  if (!word) {
+    res.status(400).json({ error: "missing word" });
+    return;
+  }
+  const db = getDb();
+  const key = `${word.toLowerCase()}|${sentence}`;
+  const hit = await db.query<{ data: string }>(`SELECT data FROM glosses WHERE key = $1`, [key]);
+  if (hit.rows[0]) {
+    res.json(JSON.parse(hit.rows[0].data));
+    return;
+  }
+  const out = await groqJson(GLOSS_PROMPT, `Word: ${word}\nSentence: ${sentence}`, res);
+  if (!out) return;
+  const str = (v: unknown) => (typeof v === "string" ? v.trim() : "");
+  const gloss = {
+    word,
+    lemma: str(out.lemma) || word,
+    en: str(out.en),
+    pos: str(out.pos),
+    note: str(out.note),
+    flashcardEn: str(out.flashcard_en) || str(out.en),
+  };
+  if (!gloss.en) {
+    res.status(502).json({ error: "lookup failed" });
+    return;
+  }
+  await db.query(`INSERT INTO glosses (key, data) VALUES ($1, $2) ON CONFLICT DO NOTHING`, [key, JSON.stringify(gloss)]);
+  res.json(gloss);
 });
 
 // ---- Stats ----------------------------------------------------------------
