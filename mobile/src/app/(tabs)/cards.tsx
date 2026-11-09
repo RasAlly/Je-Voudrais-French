@@ -44,7 +44,6 @@ export default function CardsScreen() {
 
           <Flashcards
             decks={[
-              { id: "study", label: "Study list" },
               { id: "saved", label: "Saved" },
               { id: "starred", label: "Starred" },
               ...data.units.map((u) => ({ id: `unit:${u.id}` as Deck, label: u.en ?? u.title })),
@@ -60,7 +59,7 @@ export default function CardsScreen() {
 
 /** Deck + direction picker that launches a flashcard session. */
 function Flashcards({ decks }: { decks: { id: string; label: string; count: number }[] }) {
-  const [deck, setDeck] = useState<string>(() => decks.find((d) => d.count > 0)?.id ?? "study");
+  const [deck, setDeck] = useState<string>(() => decks.find((d) => d.count > 0)?.id ?? "saved");
   const [dir, setDir] = useState<Direction>("fr");
   const selected = decks.find((d) => d.id === deck);
   return (
