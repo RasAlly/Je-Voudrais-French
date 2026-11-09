@@ -69,15 +69,16 @@ app.get("/api/course", async (_req, res) => {
     `SELECT lesson_id, completions, best_score FROM lesson_progress`,
   );
   const progress = new Map(rows.map((r) => [r.lesson_id, r]));
-  let previousDone = true;
   const units = curriculum.map((u) => ({
     id: u.id,
     title: u.title,
     en: u.en,
-    lessons: u.lessons.map((l) => {
+    // The first lesson of every unit is open so you can skip ahead;
+    // later lessons in a unit unlock once the one before is done.
+    lessons: u.lessons.map((l, i, all) => {
       const p = progress.get(l.id);
-      const unlocked = previousDone;
-      previousDone = !!p && p.completions > 0;
+      const prev = i > 0 ? progress.get(all[i - 1].id) : undefined;
+      const unlocked = i === 0 || (!!prev && prev.completions > 0);
       return {
         id: l.id,
         title: l.title,
