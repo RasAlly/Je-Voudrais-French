@@ -59,6 +59,7 @@ export default function DailyWordScreen() {
           <View style={s.card}>
             <Text style={s.cardLabel}>Définition</Text>
             <Text style={s.definition}>{word.definitionFr}</Text>
+            {!!word.definitionEn && <Text style={s.exampleEn}>{word.definitionEn}</Text>}
           </View>
         )}
 

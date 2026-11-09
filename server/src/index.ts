@@ -472,7 +472,7 @@ const DAILY_WORD_PROMPT = `You choose a "mot du jour" for an English speaker lea
 Pick ONE genuinely useful, common everyday French word or short expression for the given theme — something a learner would actually use, not rare or technical.
 Do not pick any word from the "avoid" list.
 Reply with JSON only:
-{"word":"<the bare word as in a dictionary, no article>","fr":"<with article for nouns (le/la/l'/un/une), infinitive for verbs>","en":"<English meaning>","pos":"<noun|verb|adjective|adverb|expression|other>","gender":"<masculine|feminine|empty>","definition_fr":"<a short, simple French definition>","example_fr":"<natural example sentence>","example_en":"<its English translation>","note":"<one short English tip: usage, a false friend, a related word, or a fun fact>"}`;
+{"word":"<the bare word as in a dictionary, no article>","fr":"<with article for nouns (le/la/l'/un/une), infinitive for verbs>","en":"<English meaning>","pos":"<noun|verb|adjective|adverb|expression|other>","gender":"<masculine|feminine|empty>","definition_fr":"<a short, simple French definition>","definition_en":"<English translation of definition_fr>","example_fr":"<natural example sentence>","example_en":"<its English translation>","note":"<one short English tip: usage, a false friend, a related word, or a fun fact>"}`;
 
 async function wiktionaryUrl(word: string) {
   try {
@@ -492,7 +492,21 @@ app.get("/api/daily-word", async (req, res) => {
   const db = getDb();
   const found = await db.query<{ data: string }>(`SELECT data FROM daily_words WHERE day = $1`, [day]);
   if (found.rows[0]) {
-    res.json(JSON.parse(found.rows[0].data));
+    const cached = JSON.parse(found.rows[0].data);
+    // Words saved before definitions had an English version: translate once and store it.
+    if (cached.definitionFr && !cached.definitionEn && process.env.GROQ_API_KEY) {
+      const t = await groqJson(
+        `Translate the French text into natural English. Reply with JSON only: {"en":"<translation>"}`,
+        cached.definitionFr,
+        res,
+      );
+      if (!t) return;
+      if (typeof t.en === "string" && t.en.trim()) {
+        cached.definitionEn = t.en.trim();
+        await db.query(`UPDATE daily_words SET data = $2 WHERE day = $1`, [day, JSON.stringify(cached)]);
+      }
+    }
+    res.json(cached);
     return;
   }
   const past = await db.query<{ word: string }>(`SELECT word FROM daily_words ORDER BY day DESC LIMIT 300`);
@@ -517,6 +531,7 @@ app.get("/api/daily-word", async (req, res) => {
     pos: str(out.pos),
     gender: /^(masculine|feminine)$/i.test(str(out.gender)) ? str(out.gender).toLowerCase() : "",
     definitionFr: str(out.definition_fr),
+    definitionEn: str(out.definition_en),
     exampleFr: str(out.example_fr),
     exampleEn: str(out.example_en),
     note: str(out.note),

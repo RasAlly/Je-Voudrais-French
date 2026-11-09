@@ -64,6 +64,7 @@ export interface DailyWord {
   pos: string;
   gender: string;
   definitionFr: string;
+  definitionEn?: string;
   exampleFr: string;
   exampleEn: string;
   note: string;
