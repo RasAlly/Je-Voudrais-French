@@ -2,7 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useState } from "react";
-import { Animated, Pressable, StyleSheet, Text, View } from "react-native";
+import { Alert, Animated, Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { ErrorState, Loading } from "../components/States";
 import { Button, Center, ProgressBar } from "../components/ui";
@@ -113,6 +113,40 @@ export default function FlashcardsScreen() {
     (on ? api.star(id) : api.unstar(id)).catch(() => set(!on)); // undo if the server call fails
   };
 
+  /** Created cards only: confirm, then remove it from Created and from this session. */
+  const confirmRemove = () => {
+    const target = card!;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+    Alert.alert("Remove this flashcard?", `“${target.fr}” will be removed from Created.`, [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Remove",
+        style: "destructive",
+        onPress: () => {
+          api
+            .unsave(target.id)
+            .then(() => {
+              flip.setValue(0);
+              setFlipped(false);
+              // The next card slides into this position; if it was the last, the session ends.
+              setQueue((q) => q!.filter((c) => c.id !== target.id));
+              setAgain((a) => {
+                const { [target.id]: _, ...rest } = a;
+                return rest;
+              });
+            })
+            .catch(() => Alert.alert("Couldn't remove it", "Check your connection and try again."));
+        },
+      },
+    ]);
+  };
+
+  const trash = card?.saved ? (
+    <Pressable onPress={confirmRemove} hitSlop={12} style={s.trash} accessibilityLabel="Remove flashcard">
+      <Ionicons name="trash-outline" size={22} color={colors.error} />
+    </Pressable>
+  ) : null;
+
   const answer = (knewIt: boolean) => {
     Haptics.selectionAsync().catch(() => {});
     if (!knewIt) {
@@ -147,11 +181,7 @@ export default function FlashcardsScreen() {
           style={s.close}
           accessibilityLabel={starred.has(card!.id) ? "Unstar card" : "Star card"}
         >
-          <Ionicons
-            name={starred.has(card!.id) ? "star" : "star-outline"}
-            size={24}
-            color={colors.primary}
-          />
+          <Ionicons name={starred.has(card!.id) ? "star" : "star-outline"} size={24} color={colors.primary} />
         </Pressable>
       </View>
 
@@ -159,9 +189,11 @@ export default function FlashcardsScreen() {
         <Animated.View style={[s.card, { transform: [{ perspective: 1000 }, { rotateY: front }] }]}>
           {again[card!.id] && <Text style={s.retry}>Try again</Text>}
           <Face item={card!} french={frenchFirst} />
+          {!flipped && trash}
         </Animated.View>
         <Animated.View style={[s.card, s.cardBack, { transform: [{ perspective: 1000 }, { rotateY: back }] }]}>
           <Face item={card!} french={!frenchFirst} />
+          {flipped && trash}
         </Animated.View>
       </Pressable>
 
@@ -233,6 +265,17 @@ const s = StyleSheet.create({
     justifyContent: "center",
   },
   note: { fontSize: 14, color: colors.primaryDark, textAlign: "center" },
+  trash: {
+    position: "absolute",
+    top: space.md,
+    right: space.md,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.errorSoft,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   retry: {
     position: "absolute",
     bottom: space.lg,

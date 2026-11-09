@@ -6,9 +6,9 @@ export type Direction = "fr" | "en";
 
 export function filterDeck(deck: Deck, items: Item[], study: Item[]): Item[] {
   if (deck === "study") {
-    // Study-list items don't carry the starred flag; take it from the full list.
-    const starred = new Set(items.filter((i) => i.starred).map((i) => i.id));
-    return study.map((i) => ({ ...i, starred: starred.has(i.id) }));
+    // Study-list items don't carry the starred/created flags; take them from the full list.
+    const byId = new Map(items.map((i) => [i.id, i]));
+    return study.map((i) => ({ ...i, starred: !!byId.get(i.id)?.starred, saved: !!byId.get(i.id)?.saved }));
   }
   if (deck === "starred") return items.filter((i) => i.starred);
   if (deck === "saved") return items.filter((i) => i.saved);
