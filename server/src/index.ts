@@ -2,7 +2,8 @@ import express, { type NextFunction, type Request, type Response } from "express
 import cors from "cors";
 import multer from "multer";
 import { initDb, getDb } from "./db.js";
-import { curriculum, itemsById, lessonsById, unitOfItem } from "./curriculum.js";
+import { randomUUID } from "node:crypto";
+import { curriculum, itemsById, lessonsById, registerCustomItem, unitOfItem } from "./curriculum.js";
 import { schedule, type Grade, type CardState } from "./srs.js";
 
 // Load server/.env for local development (Railway provides real env vars instead).
@@ -235,6 +236,93 @@ app.post("/api/study/results", async (req, res) => {
   res.json({ ok: true, graduated });
 });
 
+// ---- Translator + saved words ---------------------------------------------
+
+const TRANSLATE_PROMPT = `You are a French–English translator for someone learning French.
+Detect whether the input is English or French and translate it into the other language.
+Use natural, everyday French (France). Keep the learner's register; for "you", prefer "tu" unless the input is clearly formal.
+Reply with JSON only:
+{"source":"en"|"fr","fr":"<French>","en":"<English>","alternatives":["<other natural French phrasings, max 2, may be empty>"],"note":"<one short tip in English about grammar, gender or usage, or empty string>"}
+"fr" and "en" must both be filled: one is the input (lightly corrected for typos and accents), the other the translation.
+If the input is a single noun (in either language), the "fr" value must include its article (le/la/l'/les), even if the input had none. Write the note in English.`;
+
+app.post("/api/translate", async (req, res) => {
+  const text = String(req.body?.text ?? "").trim().slice(0, 500);
+  if (!text) {
+    res.status(400).json({ error: "Type something to translate" });
+    return;
+  }
+  const key = process.env.GROQ_API_KEY;
+  if (!key) {
+    res.status(501).json({ error: "Translation isn't set up: add GROQ_API_KEY on the server" });
+    return;
+  }
+  const r = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${key}`, "content-type": "application/json" },
+    body: JSON.stringify({
+      model: process.env.TRANSLATE_MODEL || "openai/gpt-oss-120b",
+      reasoning_effort: "low",
+      temperature: 0.2,
+      response_format: { type: "json_object" },
+      messages: [
+        { role: "system", content: TRANSLATE_PROMPT },
+        { role: "user", content: text },
+      ],
+    }),
+  });
+  if (!r.ok) {
+    console.error("translate failed", r.status, await r.text());
+    res
+      .status(r.status === 429 ? 429 : 502)
+      .json({ error: r.status === 429 ? "Translation limit reached — try again in a minute" : "translation failed" });
+    return;
+  }
+  const data = (await r.json()) as { choices?: { message?: { content?: string } }[] };
+  try {
+    const out = JSON.parse(data.choices?.[0]?.message?.content ?? "{}");
+    const str = (v: unknown) => (typeof v === "string" ? v.trim() : "");
+    const fr = str(out.fr);
+    const en = str(out.en);
+    if (!fr || !en) throw new Error("incomplete");
+    res.json({
+      source: out.source === "fr" ? "fr" : "en",
+      fr,
+      en,
+      alternatives: Array.isArray(out.alternatives) ? out.alternatives.map(str).filter(Boolean).slice(0, 2) : [],
+      note: str(out.note),
+    });
+  } catch {
+    res.status(502).json({ error: "translation failed" });
+  }
+});
+
+/** Save a word/phrase as your own item and put it on the study list. */
+app.post("/api/custom-items", async (req, res) => {
+  const fr = String(req.body?.fr ?? "").trim().slice(0, 300);
+  const en = String(req.body?.en ?? "").trim().slice(0, 300);
+  const note = String(req.body?.note ?? "").trim().slice(0, 300) || null;
+  if (!fr || !en) {
+    res.status(400).json({ error: "fr and en are required" });
+    return;
+  }
+  const db = getDb();
+  // Same French text saved twice → reuse the existing item.
+  const existing = [...itemsById.values()].find((i) => i.fr.toLowerCase() === fr.toLowerCase());
+  let item = existing;
+  if (!item) {
+    item = { id: `c-${randomUUID().slice(0, 8)}`, fr, en, ...(note ? { note } : {}) };
+    await db.query(`INSERT INTO custom_items (id, fr, en, note) VALUES ($1, $2, $3, $4)`, [item.id, fr, en, note]);
+    registerCustomItem(item);
+  }
+  await db.query(
+    `INSERT INTO study_list (item_id) VALUES ($1)
+     ON CONFLICT (item_id) DO UPDATE SET clean_runs = 0`,
+    [item.id],
+  );
+  res.json({ item, existed: !!existing });
+});
+
 // ---- Stats ----------------------------------------------------------------
 
 app.get("/api/stats", async (req, res) => {
@@ -350,6 +438,10 @@ app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
 });
 
 const port = Number(process.env.PORT) || 3000;
-initDb().then(() => {
+initDb().then(async () => {
+  const saved = await getDb().query<{ id: string; fr: string; en: string; note: string | null }>(
+    `SELECT id, fr, en, note FROM custom_items`,
+  );
+  for (const r of saved.rows) registerCustomItem({ id: r.id, fr: r.fr, en: r.en, ...(r.note ? { note: r.note } : {}) });
   app.listen(port, "0.0.0.0", () => console.log(`French API listening on :${port}`));
 });

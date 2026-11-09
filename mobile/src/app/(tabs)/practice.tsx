@@ -15,6 +15,13 @@ type Drill = {
 
 const DRILLS: Drill[] = [
   {
+    title: "Traduire",
+    en: "Translate",
+    description: "Type English or French, then save it to your study list",
+    icon: "language-outline",
+    href: "/practice/translate",
+  },
+  {
     title: "Les nombres",
     en: "Numbers",
     description: "Count to a million, plus prices, times and phone numbers",

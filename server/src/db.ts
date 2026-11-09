@@ -62,6 +62,14 @@ async function migrate() {
       misses      INTEGER NOT NULL DEFAULT 1,
       clean_runs  INTEGER NOT NULL DEFAULT 0
     )`,
+    // Your own words/phrases, saved from the translator.
+    `CREATE TABLE IF NOT EXISTS custom_items (
+      id          TEXT PRIMARY KEY,
+      fr          TEXT NOT NULL,
+      en          TEXT NOT NULL,
+      note        TEXT,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+    )`,
     `CREATE TABLE IF NOT EXISTS activity (
       day  DATE PRIMARY KEY,
       xp   INTEGER NOT NULL DEFAULT 0

@@ -207,3 +207,12 @@ for (const unit of curriculum) {
     }
   }
 }
+
+/** Unit id used for words you saved yourself (from the translator). */
+export const SAVED_UNIT = "saved";
+
+/** Register a saved word so every endpoint (study, review, flashcards) can use it. */
+export function registerCustomItem(item: Item) {
+  itemsById.set(item.id, item);
+  unitOfItem.set(item.id, SAVED_UNIT);
+}
