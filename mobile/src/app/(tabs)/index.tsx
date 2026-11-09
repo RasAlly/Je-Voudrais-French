@@ -32,16 +32,6 @@ export default function LearnScreen() {
           </View>
         </View>
 
-        {data.stats.due > 0 && (
-          <Pressable style={s.dueBanner} onPress={() => router.push("/review-session")}>
-            <Ionicons name="layers" size={20} color={colors.onPrimary} />
-            <Text style={s.dueText}>
-              {data.stats.due} {data.stats.due === 1 ? "word" : "words"} ready to review
-            </Text>
-            <Ionicons name="chevron-forward" size={20} color={colors.onPrimary} />
-          </Pressable>
-        )}
-
         <Pressable style={s.studyBanner} onPress={() => router.push("/daily-word")}>
           <Ionicons name="sparkles" size={18} color={colors.primary} />
           <Text style={s.studyText}>
@@ -123,14 +113,6 @@ const s = StyleSheet.create({
     paddingHorizontal: 12,
   },
   pillText: { fontSize: 14, fontWeight: "600", color: colors.text },
-  dueBanner: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: space.sm,
-    backgroundColor: colors.primary,
-    padding: space.md,
-    borderRadius: radius.md,
-  },
   studyBanner: {
     flexDirection: "row",
     alignItems: "center",
@@ -138,11 +120,9 @@ const s = StyleSheet.create({
     backgroundColor: colors.primarySoft,
     padding: space.md,
     borderRadius: radius.md,
-    marginTop: -space.sm,
   },
   studyText: { flex: 1, color: colors.primaryDark, fontSize: 15, fontWeight: "600" },
   studyHint: { fontWeight: "400", color: colors.textMuted },
-  dueText: { flex: 1, color: colors.onPrimary, fontSize: 16, fontWeight: "600" },
   unit: { gap: 2 },
   unitLabel: { fontSize: 12, letterSpacing: 2, textTransform: "uppercase", color: colors.textMuted, fontWeight: "600" },
   unitTitleRow: {

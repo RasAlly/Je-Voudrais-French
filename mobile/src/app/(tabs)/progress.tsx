@@ -26,7 +26,7 @@ export default function ProgressScreen() {
           <Tile value={`🔥 ${data.streak}`} label="day streak" />
           <Tile value={`${data.totalXp}`} label="total XP" />
           <Tile value={`${data.learned}`} label="words learned" />
-          <Tile value={`${data.due}`} label="due for review" />
+          <Tile value={`${data.study}`} label="on study list" />
         </View>
 
         <Card style={{ gap: space.md }}>

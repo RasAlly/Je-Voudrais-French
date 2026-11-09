@@ -5,7 +5,6 @@ import { initDb, getDb } from "./db.js";
 import { randomUUID } from "node:crypto";
 import { buildDailyArticle } from "./article.js";
 import { curriculum, itemsById, lessonsById, registerCustomItem, unitOfItem } from "./curriculum.js";
-import { schedule, type Grade, type CardState } from "./srs.js";
 
 // Load server/.env for local development (Railway provides real env vars instead).
 try {
@@ -47,24 +46,6 @@ async function addXp(day: string, xp: number) {
     `INSERT INTO activity (day, xp) VALUES ($1, $2)
      ON CONFLICT (day) DO UPDATE SET xp = activity.xp + EXCLUDED.xp`,
     [day, Math.round(xp)],
-  );
-}
-
-async function gradeCard(itemId: string, grade: Grade) {
-  const db = getDb();
-  const { rows } = await db.query<CardState>(
-    `SELECT ease, interval_days, reps, lapses FROM cards WHERE item_id = $1`,
-    [itemId],
-  );
-  const current: CardState = rows[0] ?? { ease: 2.5, interval_days: 0, reps: 0, lapses: 0 };
-  const next = schedule(current, grade);
-  await db.query(
-    `INSERT INTO cards (item_id, ease, interval_days, reps, lapses, due_at, last_reviewed)
-     VALUES ($1, $2, $3, $4, $5, $6, now())
-     ON CONFLICT (item_id) DO UPDATE SET
-       ease = EXCLUDED.ease, interval_days = EXCLUDED.interval_days, reps = EXCLUDED.reps,
-       lapses = EXCLUDED.lapses, due_at = EXCLUDED.due_at, last_reviewed = now()`,
-    [itemId, next.ease, next.interval_days, next.reps, next.lapses, next.due_at.toISOString()],
   );
 }
 
@@ -115,15 +96,8 @@ app.post("/api/lessons/:id/complete", async (req, res) => {
     res.status(404).json({ error: "lesson not found" });
     return;
   }
-  const { score = 0, xp = 0, day, results = [] } = req.body ?? {};
+  const { score = 0, xp = 0, day } = req.body ?? {};
   const db = getDb();
-
-  for (const r of results as { itemId: string; correct: boolean }[]) {
-    if (!itemsById.has(r.itemId)) continue;
-    const exists = await db.query(`SELECT 1 FROM cards WHERE item_id = $1`, [r.itemId]);
-    // New items enter the review deck; known items only get rescheduled on a miss.
-    if (exists.rows.length === 0 || !r.correct) await gradeCard(r.itemId, r.correct ? 2 : 0);
-  }
 
   await db.query(
     `INSERT INTO lesson_progress (lesson_id, completions, best_score, last_completed)
@@ -138,12 +112,17 @@ app.post("/api/lessons/:id/complete", async (req, res) => {
   res.json({ ok: true });
 });
 
-/** Every item in the course plus whether it's in the review deck yet. */
-app.get("/api/items", async (_req, res) => {
-  const { rows } = await getDb().query<{ item_id: string; due: boolean }>(
-    `SELECT item_id, due_at <= now() AS due FROM cards`,
+/** Words from every lesson you've completed at least once. */
+async function learnedItemIds() {
+  const { rows } = await getDb().query<{ lesson_id: string }>(
+    `SELECT lesson_id FROM lesson_progress WHERE completions > 0`,
   );
-  const cards = new Map(rows.map((r) => [r.item_id, r]));
+  return new Set(rows.flatMap((r) => lessonsById.get(r.lesson_id)?.items.map((i) => i.id) ?? []));
+}
+
+/** Every item (course + your own) with your learned / saved / starred flags. */
+app.get("/api/items", async (_req, res) => {
+  const learned = await learnedItemIds();
   const starred = await getDb().query<{ item_id: string }>(`SELECT item_id FROM starred_items`);
   const starredIds = new Set(starred.rows.map((r) => r.item_id));
   const made = await getDb().query<{ item_id: string }>(`SELECT item_id FROM made_cards`);
@@ -154,8 +133,7 @@ app.get("/api/items", async (_req, res) => {
       unitId: unitOfItem.get(i.id),
       saved: savedIds.has(i.id),
       starred: starredIds.has(i.id),
-      learned: cards.has(i.id),
-      due: cards.get(i.id)?.due ?? false,
+      learned: learned.has(i.id),
     })),
   });
 });
@@ -164,29 +142,6 @@ app.get("/api/items", async (_req, res) => {
 app.post("/api/xp", async (req, res) => {
   const { xp = 0, day } = req.body ?? {};
   await addXp(isDay(day) ? day : todayUtc(), Math.min(Number(xp) || 0, 500));
-  res.json({ ok: true });
-});
-
-// ---- Review (spaced repetition) ------------------------------------------
-
-app.get("/api/review", async (req, res) => {
-  const limit = Math.min(Number(req.query.limit) || 20, 100);
-  const { rows } = await getDb().query<{ item_id: string }>(
-    `SELECT item_id FROM cards WHERE due_at <= now() ORDER BY due_at ASC LIMIT $1`,
-    [limit],
-  );
-  const items = rows.map((r) => itemsById.get(r.item_id)).filter(Boolean);
-  res.json({ items, pool: [...itemsById.values()] });
-});
-
-app.post("/api/review", async (req, res) => {
-  const { results = [], xp = 0, day } = req.body ?? {};
-  for (const r of results as { itemId: string; grade: number }[]) {
-    if (!itemsById.has(r.itemId)) continue;
-    const g = Math.max(0, Math.min(3, Math.round(r.grade))) as Grade;
-    await gradeCard(r.itemId, g);
-  }
-  await addXp(isDay(day) ? day : todayUtc(), xp);
   res.json({ ok: true });
 });
 
@@ -575,9 +530,6 @@ app.get("/api/stats", async (req, res) => {
     return { day: d, xp: days.rows.find((r) => r.day === d)?.xp ?? 0 };
   });
 
-  const totals = await db.query<{ learned: string; due: string }>(
-    `SELECT COUNT(*) AS learned, COUNT(*) FILTER (WHERE due_at <= now()) AS due FROM cards`,
-  );
   const totalXp = days.rows.reduce((s, d) => s + Number(d.xp), 0);
   const study = await db.query<{ n: string }>(`SELECT COUNT(*) AS n FROM study_list`);
 
@@ -585,8 +537,7 @@ app.get("/api/stats", async (req, res) => {
     streak,
     xpToday: week[6].xp,
     totalXp,
-    learned: Number(totals.rows[0]?.learned ?? 0),
-    due: Number(totals.rows[0]?.due ?? 0),
+    learned: (await learnedItemIds()).size,
     study: Number(study.rows[0]?.n ?? 0),
     week,
   });

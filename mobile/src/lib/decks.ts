@@ -1,7 +1,7 @@
 import { api, type Item } from "./api";
 
 /** Flashcard deck ids: the study list, flashcards you made, starred cards, or one unit. */
-export type Deck = "due" | "learned" | "study" | "saved" | "starred" | `unit:${string}`;
+export type Deck = "study" | "saved" | "starred" | `unit:${string}`;
 export type Direction = "fr" | "en";
 
 export function filterDeck(deck: Deck, items: Item[], study: Item[]): Item[] {
@@ -12,8 +12,6 @@ export function filterDeck(deck: Deck, items: Item[], study: Item[]): Item[] {
   }
   if (deck === "starred") return items.filter((i) => i.starred);
   if (deck === "saved") return items.filter((i) => i.saved);
-  if (deck === "due") return items.filter((i) => i.due);
-  if (deck === "learned") return items.filter((i) => i.learned);
   return items.filter((i) => i.unitId === deck.slice(5));
 }
 

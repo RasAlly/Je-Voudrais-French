@@ -31,17 +31,6 @@ export default function CardsScreen() {
       <ScrollView contentContainerStyle={s.content}>
         <View style={{ gap: space.md, marginBottom: space.md }}>
           <Text style={s.title}>Cartes</Text>
-          <Card style={{ gap: space.md, alignItems: "center" }}>
-            <Text style={s.big}>{data.stats.due}</Text>
-            <Text style={s.muted}>{data.stats.due === 1 ? "card due" : "cards due"} today</Text>
-            <Button
-              title={data.stats.due ? "Start review" : "All caught up"}
-              disabled={!data.stats.due}
-              onPress={() => router.push("/review-session")}
-              style={{ alignSelf: "stretch" }}
-            />
-          </Card>
-
           <Flashcards
             decks={[
               { id: "saved", label: "Saved" },

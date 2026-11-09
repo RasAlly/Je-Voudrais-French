@@ -40,15 +40,8 @@ export function getDb(): Db {
 async function migrate() {
   // Single-user app: no users table, progress is global.
   const statements = [
-    `CREATE TABLE IF NOT EXISTS cards (
-      item_id        TEXT PRIMARY KEY,
-      ease           REAL NOT NULL DEFAULT 2.5,
-      interval_days  REAL NOT NULL DEFAULT 0,
-      reps           INTEGER NOT NULL DEFAULT 0,
-      lapses         INTEGER NOT NULL DEFAULT 0,
-      due_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
-      last_reviewed  TIMESTAMPTZ
-    )`,
+    // Spaced-repetition review was removed; drop its old table.
+    `DROP TABLE IF EXISTS cards`,
     `CREATE TABLE IF NOT EXISTS lesson_progress (
       lesson_id       TEXT PRIMARY KEY,
       completions     INTEGER NOT NULL DEFAULT 0,

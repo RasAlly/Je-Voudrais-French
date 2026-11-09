@@ -8,7 +8,6 @@ export interface Item {
   alt?: string[];
   note?: string;
   learned?: boolean;
-  due?: boolean;
   /** You made this into a flashcard (Saved deck) */
   saved?: boolean;
   /** You starred this flashcard (Starred deck) */
@@ -93,7 +92,6 @@ export interface Stats {
   xpToday: number;
   totalXp: number;
   learned: number;
-  due: number;
   study: number;
   week: { day: string; xp: number }[];
 }
@@ -138,9 +136,6 @@ export const api = {
     request<{ lesson: { id: string; title: string; items: Item[] }; pool: Item[] }>(`/api/lessons/${id}`),
   completeLesson: (id: string, body: { score: number; xp: number; results: { itemId: string; correct: boolean }[] }) =>
     request(`/api/lessons/${id}/complete`, { method: "POST", body: JSON.stringify({ ...body, day: localDay() }) }),
-  review: () => request<{ items: Item[]; pool: Item[] }>("/api/review"),
-  submitReview: (body: { xp: number; results: { itemId: string; grade: number }[] }) =>
-    request("/api/review", { method: "POST", body: JSON.stringify({ ...body, day: localDay() }) }),
   items: () => request<{ items: Item[] }>("/api/items"),
   addXp: (xp: number) => request("/api/xp", { method: "POST", body: JSON.stringify({ xp, day: localDay() }) }),
   stats: () => request<Stats>(`/api/stats?today=${localDay()}`),

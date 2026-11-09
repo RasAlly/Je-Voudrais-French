@@ -75,16 +75,6 @@ export function buildLesson(items: Item[], pool: Item[]): Exercise[] {
   return out;
 }
 
-/** One recall exercise per due card. Leans on production (typing/speaking). */
-export function buildReview(items: Item[], pool: Item[]): Exercise[] {
-  const kinds: GradedKind[] = ["type_fr", "speak", "listen_choose", "choose_en", "type_fr"];
-  return shuffle(items).map((item, i) => {
-    let kind = kinds[i % kinds.length];
-    if (kind === "type_fr" && wordCount(item.fr) >= 3) kind = "arrange";
-    return makeExercise(kind, item, pool);
-  });
-}
-
 /**
  * Deep dive for study-list words: every word gets the full ladder, from
  * recognition up to production, so weak spots get attacked from all sides.

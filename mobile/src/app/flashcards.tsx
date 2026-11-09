@@ -85,13 +85,7 @@ export default function FlashcardsScreen() {
           loading={saving}
           onPress={async () => {
             setSaving(true);
-            // Feed results into spaced repetition: missed → "again", known → "good".
-            await api
-              .submitReview({
-                xp: 5 + knew,
-                results: unique.map((itemId) => ({ itemId, grade: again[itemId] ? 0 : 2 })),
-              })
-              .catch(() => {});
+            await api.addXp(5 + knew).catch(() => {});
             exit();
           }}
         />
