@@ -15,7 +15,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ErrorState, Loading } from "../../components/States";
 import { Button, Card, Chip, Segmented } from "../../components/ui";
-import { api, type StudyItem } from "../../lib/api";
+import { api, type Item, type StudyItem } from "../../lib/api";
 import { speakFrench } from "../../lib/speech";
 import { type Deck, type Direction, filterDeck } from "../../lib/decks";
 import { useLoad } from "../../lib/useLoad";
@@ -49,6 +49,8 @@ export default function CardsScreen() {
             ].map((d) => ({ ...d, count: filterDeck(d.id as Deck, data.items, data.study.items).length }))}
             onCreated={reload}
           />
+
+          <CreatedList items={data.items.filter((i) => i.saved)} onChange={reload} />
 
           <StudyList items={data.study.items} graduateAt={data.study.graduateAt} onChange={reload} />
         </View>
@@ -205,6 +207,65 @@ function CreateCard({ open, onClose, onCreated }: { open: boolean; onClose: () =
   );
 }
 
+const CREATED_PREVIEW = 5;
+
+/** Flashcards you made (Created collection), with a remove button on each. */
+function CreatedList({ items, onChange }: { items: Item[]; onChange: () => void }) {
+  const [showAll, setShowAll] = useState(false);
+  // Hide removed cards straight away, before the reload comes back.
+  const [removed, setRemoved] = useState<Set<string>>(new Set());
+  const visible = items.filter((i) => !removed.has(i.id));
+  const shown = showAll ? visible : visible.slice(0, CREATED_PREVIEW);
+
+  const remove = (it: Item) => {
+    setRemoved((r) => new Set(r).add(it.id));
+    api
+      .unsave(it.id)
+      .then(onChange)
+      .catch(() =>
+        setRemoved((r) => {
+          const next = new Set(r);
+          next.delete(it.id);
+          return next;
+        }),
+      );
+  };
+
+  return (
+    <Card style={{ gap: space.md }}>
+      <View style={s.studyHeader}>
+        <View style={{ flex: 1 }}>
+          <Text style={s.cardTitle}>Created</Text>
+          <Text style={s.muted}>
+            {visible.length
+              ? `${visible.length} ${visible.length === 1 ? "card" : "cards"} you made`
+              : "Tap Add, or “Make flashcard” anywhere in the app."}
+          </Text>
+        </View>
+        <Ionicons name="create-outline" size={22} color={colors.primary} />
+      </View>
+
+      {shown.map((it) => (
+        <View key={it.id} style={s.studyRow}>
+          <Pressable style={{ flex: 1 }} onPress={() => speakFrench(it.fr)}>
+            <Text style={s.fr}>{it.fr}</Text>
+            <Text style={s.studyEn}>{it.en}</Text>
+          </Pressable>
+          <Pressable hitSlop={8} accessibilityLabel={`Remove ${it.fr}`} onPress={() => remove(it)}>
+            <Ionicons name="close-circle-outline" size={24} color={colors.locked} />
+          </Pressable>
+        </View>
+      ))}
+
+      {visible.length > CREATED_PREVIEW && (
+        <Pressable onPress={() => setShowAll((v) => !v)} hitSlop={8}>
+          <Text style={s.showAll}>{showAll ? "Show less" : `Show all ${visible.length}`}</Text>
+        </Pressable>
+      )}
+    </Card>
+  );
+}
+
 /** Words marked "don't know", with progress toward graduating off the list. */
 function StudyList({ items, graduateAt, onChange }: { items: StudyItem[]; graduateAt: number; onChange: () => void }) {
   return (
@@ -290,6 +351,7 @@ const s = StyleSheet.create({
   cardTitle: { fontSize: 18, fontWeight: "600", color: colors.text },
   chips: { flexDirection: "row", flexWrap: "wrap", gap: space.sm },
   studyHeader: { flexDirection: "row", alignItems: "flex-start", gap: space.md },
+  showAll: { fontSize: 14, fontWeight: "600", color: colors.primary, textAlign: "center" },
   studyRow: { flexDirection: "row", alignItems: "center", gap: space.md },
   studyEn: { fontSize: 13, color: colors.textMuted, marginTop: 1 },
   dots: { flexDirection: "row", gap: 4 },
