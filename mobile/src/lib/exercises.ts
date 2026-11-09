@@ -11,7 +11,7 @@ export type Exercise =
 
 export type GradedKind = Exclude<Exercise["kind"], "intro">;
 
-const shuffle = <T,>(arr: T[]) => {
+const shuffle = <T>(arr: T[]) => {
   const a = [...arr];
   for (let i = a.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
@@ -101,6 +101,31 @@ export function buildDeepDive(items: Item[], pool: Item[]): Exercise[] {
     out.push(makeExercise("speak", item, pool));
   }
   return out;
+}
+
+/**
+ * Custom practice: every chosen exercise type for every word, shuffled so
+ * the same word doesn't come up twice in a row, then cut to `limit`.
+ */
+export function buildCustom(items: Item[], pool: Item[], kinds: GradedKind[], limit?: number): Exercise[] {
+  const pairs: { item: Item; kind: GradedKind }[] = [];
+  for (const item of items)
+    for (const kind of kinds) {
+      // Building a sentence from tiles needs at least two words.
+      if (kind === "arrange" && wordCount(item.fr) < 2) continue;
+      pairs.push({ item, kind });
+    }
+  // Words that can't be arranged still get practised if "arrange" was the only pick.
+  if (!pairs.length) for (const item of items) pairs.push({ item, kind: "type_fr" });
+
+  const picked = shuffle(pairs).slice(0, limit ?? pairs.length);
+  // Nudge apart back-to-back repeats of the same word.
+  for (let i = 1; i < picked.length; i++) {
+    if (picked[i].item.id !== picked[i - 1].item.id) continue;
+    const j = picked.findIndex((p, k) => k > i && p.item.id !== picked[i].item.id);
+    if (j > 0) [picked[i], picked[j]] = [picked[j], picked[i]];
+  }
+  return picked.map((p) => makeExercise(p.kind, p.item, pool));
 }
 
 export const KIND_LABELS: Record<Exercise["kind"], string> = {

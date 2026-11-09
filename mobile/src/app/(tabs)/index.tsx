@@ -63,6 +63,19 @@ export default function LearnScreen() {
               {unit.lessons.map((l) => (
                 <LessonRow key={l.id} lesson={l} />
               ))}
+              <Pressable
+                onPress={() => router.push(`/custom/${unit.id}`)}
+                style={({ pressed }) => [s.lesson, s.custom, pressed && { opacity: 0.85 }]}
+              >
+                <View style={[s.badge, s.badgeCustom]}>
+                  <Ionicons name="options-outline" size={18} color={colors.primary} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={s.lessonTitle}>Custom practice</Text>
+                  <Text style={s.lessonSub}>Pick your exercise types</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+              </Pressable>
             </View>
           </View>
         ))}
@@ -133,7 +146,13 @@ const s = StyleSheet.create({
   dueText: { flex: 1, color: colors.onPrimary, fontSize: 16, fontWeight: "600" },
   unit: { gap: 2 },
   unitLabel: { fontSize: 12, letterSpacing: 2, textTransform: "uppercase", color: colors.textMuted, fontWeight: "600" },
-  unitTitleRow: { flexDirection: "row", alignItems: "baseline", flexWrap: "wrap", columnGap: space.sm, marginBottom: space.sm },
+  unitTitleRow: {
+    flexDirection: "row",
+    alignItems: "baseline",
+    flexWrap: "wrap",
+    columnGap: space.sm,
+    marginBottom: space.sm,
+  },
   unitTitle: { fontFamily: fonts.serif, fontSize: 24, color: colors.text },
   unitEn: { fontSize: 14, color: colors.textMuted },
   lessons: { gap: space.sm },
@@ -148,6 +167,8 @@ const s = StyleSheet.create({
     padding: space.md,
   },
   lessonLocked: { backgroundColor: "transparent" },
+  custom: { backgroundColor: "transparent", borderStyle: "dashed", borderColor: colors.primary },
+  badgeCustom: { backgroundColor: colors.primarySoft },
   badge: {
     width: 40,
     height: 40,

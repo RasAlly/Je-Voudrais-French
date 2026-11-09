@@ -29,7 +29,7 @@ type Props = {
 
 type StepStatus = "seen" | "correct" | "wrong";
 
-const KIND_ICONS: Record<Exercise["kind"], ComponentProps<typeof Ionicons>["name"]> = {
+export const KIND_ICONS: Record<Exercise["kind"], ComponentProps<typeof Ionicons>["name"]> = {
   intro: "sparkles-outline",
   choose_en: "list-outline",
   listen_choose: "ear-outline",
