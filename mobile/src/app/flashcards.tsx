@@ -109,8 +109,16 @@ export default function FlashcardsScreen() {
         else next.delete(id);
         return next;
       });
-    set(on);
-    (on ? api.star(id) : api.unstar(id)).catch(() => set(!on)); // undo if the server call fails
+    const apply = () => {
+      set(on);
+      (on ? api.star(id) : api.unstar(id)).catch(() => set(!on)); // undo if the server call fails
+    };
+    if (on) return apply();
+    // Unstarring asks first, like removing a created card.
+    Alert.alert("Remove from Starred?", `“${card!.fr}” will be removed from your Starred collection.`, [
+      { text: "Cancel", style: "cancel" },
+      { text: "Remove", style: "destructive", onPress: apply },
+    ]);
   };
 
   /** Created cards only: confirm, then remove it from Created and from this session. */
