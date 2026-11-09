@@ -457,6 +457,80 @@ app.post("/api/gloss", async (req, res) => {
   res.json(gloss);
 });
 
+// ---- Daily word -------------------------------------------------------------
+
+/** One theme per day (cycled), so words cover lots of everyday life. */
+const WORD_THEMES = [
+  "food and cooking", "travel and transport", "feelings and emotions", "the home", "work and the office",
+  "weather and seasons", "the body and health", "nature and animals", "the city", "time and the calendar",
+  "common verbs of movement", "describing people", "shopping and money", "hobbies and sport",
+  "school and learning", "family and relationships", "clothes", "everyday conversation", "the café and restaurant",
+  "useful adverbs", "common adjectives", "technology", "music and culture", "a common idiomatic expression",
+];
+
+const DAILY_WORD_PROMPT = `You choose a "mot du jour" for an English speaker learning French (beginner to intermediate).
+Pick ONE genuinely useful, common everyday French word or short expression for the given theme — something a learner would actually use, not rare or technical.
+Do not pick any word from the "avoid" list.
+Reply with JSON only:
+{"word":"<the bare word as in a dictionary, no article>","fr":"<with article for nouns (le/la/l'/un/une), infinitive for verbs>","en":"<English meaning>","pos":"<noun|verb|adjective|adverb|expression|other>","gender":"<masculine|feminine|empty>","definition_fr":"<a short, simple French definition>","example_fr":"<natural example sentence>","example_en":"<its English translation>","note":"<one short English tip: usage, a false friend, a related word, or a fun fact>"}`;
+
+async function wiktionaryUrl(word: string) {
+  try {
+    const q = new URLSearchParams({ action: "query", titles: word, format: "json", formatversion: "2" });
+    const r = await fetch(`https://fr.wiktionary.org/w/api.php?${q}`, {
+      headers: { "User-Agent": "JeVoudrais/1.0 (personal French-learning app)" },
+    });
+    const d = (await r.json()) as { query?: { pages?: { missing?: boolean }[] } };
+    if (d.query?.pages?.[0] && !d.query.pages[0].missing)
+      return `https://fr.wiktionary.org/wiki/${encodeURIComponent(word.replace(/ /g, "_"))}`;
+  } catch {}
+  return null;
+}
+
+app.get("/api/daily-word", async (req, res) => {
+  const day = isDay(req.query.day) ? req.query.day : todayUtc();
+  const db = getDb();
+  const found = await db.query<{ data: string }>(`SELECT data FROM daily_words WHERE day = $1`, [day]);
+  if (found.rows[0]) {
+    res.json(JSON.parse(found.rows[0].data));
+    return;
+  }
+  const past = await db.query<{ word: string }>(`SELECT word FROM daily_words ORDER BY day DESC LIMIT 300`);
+  const avoid = [...past.rows.map((r) => r.word), ...[...itemsById.values()].map((i) => i.fr)];
+  const dayNumber = Math.floor(Date.parse(day + "T00:00:00Z") / 86_400_000);
+  const theme = WORD_THEMES[dayNumber % WORD_THEMES.length];
+
+  const out = await groqJson(DAILY_WORD_PROMPT, `Theme: ${theme}\nAvoid: ${avoid.join(", ")}`, res);
+  if (!out) return;
+  const str = (v: unknown) => (typeof v === "string" ? v.trim() : "");
+  const word = str(out.word) || str(out.fr);
+  if (!word || !str(out.en)) {
+    res.status(502).json({ error: "Couldn't pick today's word" });
+    return;
+  }
+  const daily = {
+    day,
+    theme,
+    word,
+    fr: str(out.fr) || word,
+    en: str(out.en),
+    pos: str(out.pos),
+    gender: /^(masculine|feminine)$/i.test(str(out.gender)) ? str(out.gender).toLowerCase() : "",
+    definitionFr: str(out.definition_fr),
+    exampleFr: str(out.example_fr),
+    exampleEn: str(out.example_en),
+    note: str(out.note),
+    wiktionary: await wiktionaryUrl(word),
+  };
+  await db.query(`INSERT INTO daily_words (day, word, data) VALUES ($1, $2, $3) ON CONFLICT (day) DO NOTHING`, [
+    day,
+    word,
+    JSON.stringify(daily),
+  ]);
+  const saved = await db.query<{ data: string }>(`SELECT data FROM daily_words WHERE day = $1`, [day]);
+  res.json(JSON.parse(saved.rows[0].data));
+});
+
 // ---- Stats ----------------------------------------------------------------
 
 app.get("/api/stats", async (req, res) => {

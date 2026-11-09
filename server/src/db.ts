@@ -94,6 +94,13 @@ async function migrate() {
       key   TEXT PRIMARY KEY,
       data  TEXT NOT NULL
     )`,
+    // One "mot du jour" per day.
+    `CREATE TABLE IF NOT EXISTS daily_words (
+      day         TEXT PRIMARY KEY,
+      word        TEXT NOT NULL,
+      data        TEXT NOT NULL,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+    )`,
     `CREATE TABLE IF NOT EXISTS activity (
       day  DATE PRIMARY KEY,
       xp   INTEGER NOT NULL DEFAULT 0

@@ -54,6 +54,22 @@ export interface Gloss {
   flashcardEn: string;
 }
 
+export interface DailyWord {
+  day: string;
+  theme: string;
+  word: string;
+  /** With article / infinitive, e.g. "la forêt" */
+  fr: string;
+  en: string;
+  pos: string;
+  gender: string;
+  definitionFr: string;
+  exampleFr: string;
+  exampleEn: string;
+  note: string;
+  wiktionary: string | null;
+}
+
 export interface LessonSummary {
   id: string;
   title: string;
@@ -144,6 +160,7 @@ export const api = {
     request<{ articles: { day: string; title: string; description: string; thumbnail: string | null }[] }>(
       "/api/articles",
     ),
+  dailyWord: (day = localDay()) => request<DailyWord>(`/api/daily-word?day=${day}`),
   gloss: (word: string, sentence: string) =>
     request<Gloss>("/api/gloss", { method: "POST", body: JSON.stringify({ word, sentence }) }),
   submitStudy: (body: { xp: number; results: { itemId: string; clean: boolean }[] }) =>

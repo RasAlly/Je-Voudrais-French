@@ -19,6 +19,7 @@ export default function RootLayout() {
         <Stack.Screen name="review-session" options={{ presentation: "fullScreenModal", gestureEnabled: false }} />
         <Stack.Screen name="study-session" options={{ presentation: "fullScreenModal", gestureEnabled: false }} />
         <Stack.Screen name="custom/[unit]" options={{ presentation: "fullScreenModal", gestureEnabled: false }} />
+        <Stack.Screen name="daily-word" options={{ presentation: "modal" }} />
         <Stack.Screen name="flashcards" options={{ presentation: "fullScreenModal", gestureEnabled: false }} />
       </Stack>
     </SafeAreaProvider>
