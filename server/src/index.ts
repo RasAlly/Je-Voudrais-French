@@ -330,6 +330,40 @@ app.post("/api/custom-items", async (req, res) => {
   res.json({ item, existed: !!existing });
 });
 
+// ---- Grammar progress -------------------------------------------------------
+// Stored in lesson_progress under "grammar:<topic>" (topics live in the app).
+
+app.get("/api/grammar", async (_req, res) => {
+  const { rows } = await getDb().query<{ lesson_id: string; completions: number; best_score: number }>(
+    `SELECT lesson_id, completions, best_score FROM lesson_progress WHERE lesson_id LIKE 'grammar:%'`,
+  );
+  res.json({
+    progress: Object.fromEntries(
+      rows.map((r) => [r.lesson_id.slice(8), { completions: r.completions, bestScore: r.best_score }]),
+    ),
+  });
+});
+
+app.post("/api/grammar/:topic/complete", async (req, res) => {
+  const topic = req.params.topic;
+  if (!/^[a-z0-9-]{1,40}$/.test(topic)) {
+    res.status(400).json({ error: "bad topic" });
+    return;
+  }
+  const { score = 0, xp = 0, day } = req.body ?? {};
+  await getDb().query(
+    `INSERT INTO lesson_progress (lesson_id, completions, best_score, last_completed)
+     VALUES ($1, 1, $2, now())
+     ON CONFLICT (lesson_id) DO UPDATE SET
+       completions = lesson_progress.completions + 1,
+       best_score = GREATEST(lesson_progress.best_score, EXCLUDED.best_score),
+       last_completed = now()`,
+    [`grammar:${topic}`, Math.max(0, Math.min(100, Math.round(Number(score) || 0)))],
+  );
+  await addXp(isDay(day) ? day : todayUtc(), Math.min(Number(xp) || 0, 100));
+  res.json({ ok: true });
+});
+
 // ---- Daily Article ----------------------------------------------------------
 
 /** Today's article (built from Wikipedia on first request of the day, then cached). */

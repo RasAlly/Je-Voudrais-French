@@ -157,6 +157,10 @@ export const api = {
     request<{ articles: { day: string; title: string; description: string; thumbnail: string | null }[] }>(
       "/api/articles",
     ),
+  grammarProgress: () =>
+    request<{ progress: Record<string, { completions: number; bestScore: number }> }>("/api/grammar"),
+  completeGrammar: (topic: string, body: { score: number; xp: number }) =>
+    request(`/api/grammar/${topic}/complete`, { method: "POST", body: JSON.stringify({ ...body, day: localDay() }) }),
   dailyWord: (day = localDay()) => request<DailyWord>(`/api/daily-word?day=${day}`),
   gloss: (word: string, sentence: string) =>
     request<Gloss>("/api/gloss", { method: "POST", body: JSON.stringify({ word, sentence }) }),

@@ -47,6 +47,7 @@ const DRILLS: Drill[] = [
     en: "Grammar",
     description: "Articles, verb conjugation, negation and more",
     icon: "school-outline",
+    href: "/practice/grammar",
   },
 ];
 
