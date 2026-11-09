@@ -56,7 +56,7 @@ function Flashcards({ decks }: { decks: { id: string; label: string; count: numb
       <View style={s.studyHeader}>
         <View style={{ flex: 1 }}>
           <Text style={s.cardTitle}>Flashcards</Text>
-          <Text style={s.muted}>Tap to flip, then rate yourself</Text>
+          <Text style={s.muted}>Select collection, tap to flip</Text>
         </View>
         <Ionicons name="albums" size={22} color={colors.primary} />
       </View>
