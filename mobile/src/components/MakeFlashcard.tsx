@@ -18,7 +18,7 @@ type Props = {
   style?: ViewStyle;
 };
 
-/** "Make flashcard": adds the word to your Saved flashcard deck. */
+/** "Make flashcard": adds the word to your Created flashcard deck. */
 export function MakeFlashcard({ item, word, variant = "icon", style }: Props) {
   const key = item?.id ?? word?.fr ?? "";
   // Remember which word was added, so the button resets when the word changes.
