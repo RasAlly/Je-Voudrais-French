@@ -57,6 +57,10 @@ export function Session({ title, exercises, onFinish }: Props) {
   const [firstTry, setFirstTry] = useState<Record<string, boolean>>({});
   const [missed, setMissed] = useState<Record<string, boolean>>({});
   const [status, setStatus] = useState<Record<number, StepStatus>>({});
+  // Bumped by "Retry" to remount the current exercise fresh.
+  const [attempt, setAttempt] = useState(0);
+  // Whether the last answer queued a copy of this exercise at the end (missed answers do).
+  const [requeued, setRequeued] = useState(false);
 
   const ex = queue[index];
   const progress = index / queue.length;
@@ -69,6 +73,7 @@ export function Session({ title, exercises, onFinish }: Props) {
     stopSpeaking();
     if (ex.kind === "intro") setStatus((st) => ({ ...st, [index]: st[index] ?? "seen" }));
     setFeedback(null);
+    setRequeued(false);
     const next = index + 1;
     if (next >= queue.length) setDone(true);
     else setIndex(next);
@@ -77,6 +82,7 @@ export function Session({ title, exercises, onFinish }: Props) {
   const jumpTo = (i: number) => {
     stopSpeaking();
     setFeedback(null);
+    setRequeued(false);
     setIndex(i);
     setTocOpen(false);
   };
@@ -92,7 +98,18 @@ export function Session({ title, exercises, onFinish }: Props) {
     ).catch(() => {});
     // Missed items come back at the end of the session.
     if (!r.correct) setQueue((q) => [...q, { ...ex }]);
+    setRequeued(!r.correct);
     setFeedback(r);
+  };
+
+  /** Try the same exercise again right now (the first-try score is already recorded). */
+  const retry = () => {
+    stopSpeaking();
+    // Retrying now replaces the "see it again at the end" copy.
+    if (requeued) setQueue((q) => q.slice(0, -1));
+    setRequeued(false);
+    setFeedback(null);
+    setAttempt((a) => a + 1);
   };
 
   if (done) {
@@ -139,11 +156,13 @@ export function Session({ title, exercises, onFinish }: Props) {
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
         <View style={s.body}>
           {ex.kind === "intro" && <Intro key={index} ex={ex} onContinue={() => advance()} />}
-          {ex.kind === "choose_en" && <ChooseEn key={index} {...common} ex={ex} />}
-          {ex.kind === "listen_choose" && <ListenChoose key={index} {...common} ex={ex} />}
-          {(ex.kind === "type_fr" || ex.kind === "dictation") && <TypeFr key={index} {...common} ex={ex} />}
-          {ex.kind === "arrange" && <Arrange key={index} {...common} ex={ex} />}
-          {ex.kind === "speak" && <Speak key={index} {...common} ex={ex} onSkip={() => advance()} />}
+          {ex.kind === "choose_en" && <ChooseEn key={`${index}-${attempt}`} {...common} ex={ex} />}
+          {ex.kind === "listen_choose" && <ListenChoose key={`${index}-${attempt}`} {...common} ex={ex} />}
+          {(ex.kind === "type_fr" || ex.kind === "dictation") && (
+            <TypeFr key={`${index}-${attempt}`} {...common} ex={ex} />
+          )}
+          {ex.kind === "arrange" && <Arrange key={`${index}-${attempt}`} {...common} ex={ex} />}
+          {ex.kind === "speak" && <Speak key={`${index}-${attempt}`} {...common} ex={ex} onSkip={() => advance()} />}
         </View>
       </KeyboardAvoidingView>
 
@@ -159,11 +178,18 @@ export function Session({ title, exercises, onFinish }: Props) {
             </Text>
           )}
           {feedback.note && <Text style={s.feedbackNote}>{feedback.note}</Text>}
-          <Button
-            title="Continue"
-            onPress={() => advance()}
-            style={{ backgroundColor: feedback.correct ? colors.success : colors.error, borderColor: "transparent" }}
-          />
+          <View style={s.feedbackActions}>
+            <Button title="Retry" icon="refresh" variant="secondary" onPress={retry} style={s.retryButton} />
+            <Button
+              title="Continue"
+              onPress={() => advance()}
+              style={{
+                flex: 1,
+                backgroundColor: feedback.correct ? colors.success : colors.error,
+                borderColor: "transparent",
+              }}
+            />
+          </View>
         </View>
       )}
 
@@ -281,6 +307,8 @@ function Stat({ label, value }: { label: string; value: string }) {
 }
 
 const s = StyleSheet.create({
+  feedbackActions: { flexDirection: "row", gap: space.sm },
+  retryButton: { backgroundColor: "#FFFFFF", borderColor: "transparent", paddingHorizontal: space.md },
   screen: { flex: 1, backgroundColor: colors.bg, paddingHorizontal: space.lg, paddingBottom: space.md },
   header: { flexDirection: "row", alignItems: "center", gap: space.sm, paddingBottom: space.md },
   iconButton: { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center" },
@@ -317,7 +345,13 @@ const s = StyleSheet.create({
   statLabel: { fontSize: 13, color: colors.textMuted, marginTop: 2 },
   toc: { flex: 1, backgroundColor: colors.bg, paddingHorizontal: space.lg, paddingTop: space.lg },
   tocHeader: { flexDirection: "row", alignItems: "flex-start", marginBottom: space.md },
-  tocEyebrow: { fontSize: 12, letterSpacing: 2, textTransform: "uppercase", color: colors.textMuted, fontWeight: "600" },
+  tocEyebrow: {
+    fontSize: 12,
+    letterSpacing: 2,
+    textTransform: "uppercase",
+    color: colors.textMuted,
+    fontWeight: "600",
+  },
   tocTitle: { fontFamily: fonts.serif, fontSize: 26, color: colors.text },
   tocMeta: { fontSize: 13, color: colors.textMuted, marginTop: 2 },
   tocSection: {

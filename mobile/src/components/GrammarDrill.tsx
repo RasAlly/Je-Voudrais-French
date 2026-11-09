@@ -90,6 +90,14 @@ export function GrammarDrill({
     speakFrench(answeredSentence(q));
   };
 
+  /** Try this question again now; replaces the copy queued at the end for a miss. */
+  const retry = () => {
+    stopSpeaking();
+    if (feedback && !feedback.correct) setQueue((list) => list.slice(0, -1));
+    setFeedback(null);
+    setInput("");
+  };
+
   const next = () => {
     stopSpeaking();
     setFeedback(null);
@@ -204,7 +212,10 @@ export function GrammarDrill({
 
         <View style={s.footer}>
           {feedback ? (
-            <Button title="Continue" icon="arrow-forward" onPress={next} />
+            <View style={s.actions}>
+              <Button title="Retry" icon="refresh" variant="secondary" onPress={retry} style={s.retryButton} />
+              <Button title="Continue" icon="arrow-forward" onPress={next} style={{ flex: 1 }} />
+            </View>
           ) : q.kind === "type" ? (
             <Button title="Check" disabled={!input.trim()} onPress={() => answer(gradeTyped(q, input))} />
           ) : null}
@@ -260,6 +271,8 @@ const s = StyleSheet.create({
   answer: { fontFamily: fonts.serif, fontSize: 19, color: colors.text },
   explain: { fontSize: 14, color: colors.text },
   footer: { paddingTop: space.sm },
+  actions: { flexDirection: "row", gap: space.sm },
+  retryButton: { backgroundColor: "#FFFFFF", paddingHorizontal: space.md },
   doneBox: { flex: 1, alignItems: "center", justifyContent: "center", gap: space.sm },
   doneTitle: { fontSize: 32, fontFamily: fonts.serif, color: colors.text },
   muted: { color: colors.textMuted, fontSize: 16 },
