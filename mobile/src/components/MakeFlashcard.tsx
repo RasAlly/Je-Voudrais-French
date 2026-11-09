@@ -9,7 +9,7 @@ import { Button } from "./ui";
 type Word = { fr: string; en: string; note?: string };
 
 type Props = {
-  /** A course item (or a saved word with an id)… */
+  /** An existing word (course item or one you already kept)… */
   item?: Item;
   /** …or a new word/phrase that isn't an item yet (numbers, translations). */
   word?: Word;
@@ -18,10 +18,7 @@ type Props = {
   style?: ViewStyle;
 };
 
-/**
- * "Make flashcard": puts the word on the study list, so it shows up in the
- * Study list flashcard deck and in deep-dive sessions.
- */
+/** "Make flashcard": adds the word to your Saved flashcard deck. */
 export function MakeFlashcard({ item, word, variant = "icon", style }: Props) {
   const key = item?.id ?? word?.fr ?? "";
   // Remember which word was added, so the button resets when the word changes.
@@ -35,8 +32,8 @@ export function MakeFlashcard({ item, word, variant = "icon", style }: Props) {
     setBusy(true);
     setFailed(false);
     try {
-      if (item) await api.addToStudy(item.id);
-      else if (word) await api.saveWord({ ...word, to: "study" });
+      if (item) await api.save(item.id);
+      else if (word) await api.saveWord({ ...word, to: "saved" });
       setAddedKey(key);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
     } catch {

@@ -140,8 +140,8 @@ export default function TranslateScreen() {
 
               <View style={s.actions}>
                 <Button
-                  title={current.saved ? "Saved" : "Save"}
-                  icon={current.saved ? "bookmark" : "bookmark-outline"}
+                  title={current.saved ? "Flashcard made" : "Make flashcard"}
+                  icon={current.saved ? "checkmark" : "albums-outline"}
                   variant="secondary"
                   loading={saving === "saved"}
                   disabled={current.saved}
@@ -149,8 +149,8 @@ export default function TranslateScreen() {
                   style={{ flex: 1 }}
                 />
                 <Button
-                  title={current.studying ? "Flashcard made" : "Make flashcard"}
-                  icon={current.studying ? "checkmark" : "albums-outline"}
+                  title={current.studying ? "On study list" : "Study list"}
+                  icon={current.studying ? "checkmark" : "school-outline"}
                   variant="secondary"
                   loading={saving === "study"}
                   disabled={current.studying}

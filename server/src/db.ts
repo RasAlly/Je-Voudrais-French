@@ -70,10 +70,17 @@ async function migrate() {
       note        TEXT,
       created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
     )`,
-    // Bookmarked words ("Saved" flashcard deck) — separate from the study list.
-    `CREATE TABLE IF NOT EXISTS saved_items (
+    // Starred flashcards (the star on the flashcard screen). This table used to be
+    // called saved_items; rename it once so existing stars carry over.
+    `ALTER TABLE IF EXISTS saved_items RENAME TO starred_items`,
+    `CREATE TABLE IF NOT EXISTS starred_items (
       item_id   TEXT PRIMARY KEY,
       saved_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+    )`,
+    // Flashcards you made yourself ("Make flashcard" anywhere in the app) — the Saved deck.
+    `CREATE TABLE IF NOT EXISTS made_cards (
+      item_id  TEXT PRIMARY KEY,
+      made_at  TIMESTAMPTZ NOT NULL DEFAULT now()
     )`,
     `CREATE TABLE IF NOT EXISTS activity (
       day  DATE PRIMARY KEY,

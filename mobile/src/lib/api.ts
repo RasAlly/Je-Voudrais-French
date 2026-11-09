@@ -9,7 +9,10 @@ export interface Item {
   note?: string;
   learned?: boolean;
   due?: boolean;
+  /** You made this into a flashcard (Saved deck) */
   saved?: boolean;
+  /** You starred this flashcard (Starred deck) */
+  starred?: boolean;
   unitId?: string;
 }
 
@@ -104,9 +107,11 @@ export const api = {
   removeFromStudy: (itemId: string) => request(`/api/study/${encodeURIComponent(itemId)}`, { method: "DELETE" }),
   translate: (text: string) =>
     request<Translation>("/api/translate", { method: "POST", body: JSON.stringify({ text }) }),
+  /** Make an existing word into a flashcard (Saved deck). */
   save: (itemId: string) => request("/api/saved", { method: "POST", body: JSON.stringify({ itemId }) }),
-  unsave: (itemId: string) => request(`/api/saved/${encodeURIComponent(itemId)}`, { method: "DELETE" }),
-  /** Keep a translated word/phrase as your own: bookmark it or add it to the study list. */
+  star: (itemId: string) => request("/api/starred", { method: "POST", body: JSON.stringify({ itemId }) }),
+  unstar: (itemId: string) => request(`/api/starred/${encodeURIComponent(itemId)}`, { method: "DELETE" }),
+  /** Keep a new word/phrase as your own: make a flashcard (Saved) or add it to the study list. */
   saveWord: (word: { fr: string; en: string; note?: string; to: "saved" | "study" }) =>
     request<{ item: Item; existed: boolean }>("/api/custom-items", { method: "POST", body: JSON.stringify(word) }),
   submitStudy: (body: { xp: number; results: { itemId: string; clean: boolean }[] }) =>

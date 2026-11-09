@@ -35,14 +35,14 @@ export default function FlashcardsScreen() {
   const [flipped, setFlipped] = useState(false);
   const [again, setAgain] = useState<Record<string, boolean>>({});
   const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState<Set<string>>(new Set());
+  const [starred, setStarred] = useState<Set<string>>(new Set());
   const [flip] = useState(() => new Animated.Value(0));
 
   const load = () => {
     loadDeck(deck)
       .then((items) => {
         setQueue(shuffle(items));
-        setSaved(new Set(items.filter((i) => i.saved).map((i) => i.id)));
+        setStarred(new Set(items.filter((i) => i.starred).map((i) => i.id)));
       })
       .catch((e) => setError(e.message));
   };
@@ -104,19 +104,19 @@ export default function FlashcardsScreen() {
     setFlipped((f) => !f);
   };
 
-  const toggleSave = () => {
+  const toggleStar = () => {
     const id = card!.id;
-    const on = !saved.has(id);
+    const on = !starred.has(id);
     Haptics.selectionAsync().catch(() => {});
     const set = (add: boolean) =>
-      setSaved((prev) => {
+      setStarred((prev) => {
         const next = new Set(prev);
         if (add) next.add(id);
         else next.delete(id);
         return next;
       });
     set(on);
-    (on ? api.save(id) : api.unsave(id)).catch(() => set(!on)); // undo if the server call fails
+    (on ? api.star(id) : api.unstar(id)).catch(() => set(!on)); // undo if the server call fails
   };
 
   const answer = (knewIt: boolean) => {
@@ -148,13 +148,13 @@ export default function FlashcardsScreen() {
           {index + 1}/{queue.length}
         </Text>
         <Pressable
-          onPress={toggleSave}
+          onPress={toggleStar}
           hitSlop={12}
           style={s.close}
-          accessibilityLabel={saved.has(card!.id) ? "Remove from saved" : "Save card"}
+          accessibilityLabel={starred.has(card!.id) ? "Unstar card" : "Star card"}
         >
           <Ionicons
-            name={saved.has(card!.id) ? "bookmark" : "bookmark-outline"}
+            name={starred.has(card!.id) ? "star" : "star-outline"}
             size={24}
             color={colors.primary}
           />
