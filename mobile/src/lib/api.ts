@@ -9,6 +9,7 @@ export interface Item {
   note?: string;
   learned?: boolean;
   due?: boolean;
+  saved?: boolean;
   unitId?: string;
 }
 
@@ -103,8 +104,10 @@ export const api = {
   removeFromStudy: (itemId: string) => request(`/api/study/${encodeURIComponent(itemId)}`, { method: "DELETE" }),
   translate: (text: string) =>
     request<Translation>("/api/translate", { method: "POST", body: JSON.stringify({ text }) }),
-  /** Save a word/phrase as your own and add it to the study list. */
-  saveWord: (word: { fr: string; en: string; note?: string }) =>
+  save: (itemId: string) => request("/api/saved", { method: "POST", body: JSON.stringify({ itemId }) }),
+  unsave: (itemId: string) => request(`/api/saved/${encodeURIComponent(itemId)}`, { method: "DELETE" }),
+  /** Keep a translated word/phrase as your own: bookmark it or add it to the study list. */
+  saveWord: (word: { fr: string; en: string; note?: string; to: "saved" | "study" }) =>
     request<{ item: Item; existed: boolean }>("/api/custom-items", { method: "POST", body: JSON.stringify(word) }),
   submitStudy: (body: { xp: number; results: { itemId: string; clean: boolean }[] }) =>
     request<{ graduated: string[] }>("/api/study/results", {

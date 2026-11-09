@@ -70,6 +70,11 @@ async function migrate() {
       note        TEXT,
       created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
     )`,
+    // Bookmarked words ("Saved" flashcard deck) — separate from the study list.
+    `CREATE TABLE IF NOT EXISTS saved_items (
+      item_id   TEXT PRIMARY KEY,
+      saved_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+    )`,
     `CREATE TABLE IF NOT EXISTS activity (
       day  DATE PRIMARY KEY,
       xp   INTEGER NOT NULL DEFAULT 0

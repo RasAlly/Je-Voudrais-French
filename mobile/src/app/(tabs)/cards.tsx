@@ -51,8 +51,8 @@ export default function CardsScreen() {
                 { id: "due", label: "Due" },
                 { id: "learned", label: "My words" },
                 { id: "study", label: "Study list" },
+                { id: "saved", label: "Saved" },
                 ...data.units.map((u) => ({ id: `unit:${u.id}` as Deck, label: u.en ?? u.title })),
-                { id: "unit:saved", label: "Saved" },
               ].map((d) => ({ ...d, count: filterDeck(d.id as Deck, data.items, data.study.items).length }))}
             />
 

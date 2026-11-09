@@ -18,12 +18,12 @@ import { api, type Translation } from "../../lib/api";
 import { speakFrench, stopSpeaking } from "../../lib/speech";
 import { colors, fonts, radius, space } from "../../theme";
 
-type Entry = Translation & { input: string; saved?: "new" | "existed" };
+type Entry = Translation & { input: string; saved?: boolean; studying?: boolean };
 
 export default function TranslateScreen() {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
-  const [saving, setSaving] = useState(false);
+  const [saving, setSaving] = useState<"saved" | "study" | null>(null);
   const [error, setError] = useState<string | null>(null);
   // Newest first; the first entry is the one being shown.
   const [history, setHistory] = useState<Entry[]>([]);
@@ -48,18 +48,20 @@ export default function TranslateScreen() {
     }
   };
 
-  const save = async () => {
+  const keep = async (to: "saved" | "study") => {
     if (!current || saving) return;
-    setSaving(true);
+    setSaving(to);
     setError(null);
     try {
-      const r = await api.saveWord({ fr: current.fr, en: current.en, note: current.note || undefined });
+      await api.saveWord({ fr: current.fr, en: current.en, note: current.note || undefined, to });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-      setHistory((h) => h.map((e, i) => (i === 0 ? { ...e, saved: r.existed ? "existed" : "new" } : e)));
+      setHistory((h) =>
+        h.map((e, i) => (i === 0 ? { ...e, ...(to === "saved" ? { saved: true } : { studying: true }) } : e)),
+      );
     } catch (e) {
       setError((e as Error).message);
     } finally {
-      setSaving(false);
+      setSaving(null);
     }
   };
 
@@ -136,16 +138,26 @@ export default function TranslateScreen() {
                 </View>
               )}
 
-              {current.saved ? (
-                <View style={s.saved}>
-                  <Ionicons name="checkmark-circle" size={20} color={colors.success} />
-                  <Text style={s.savedText}>
-                    {current.saved === "new" ? "Added to your study list" : "Already saved — back on your study list"}
-                  </Text>
-                </View>
-              ) : (
-                <Button title="Add to study list" icon="bookmark-outline" variant="secondary" loading={saving} onPress={save} />
-              )}
+              <View style={s.actions}>
+                <Button
+                  title={current.saved ? "Saved" : "Save"}
+                  icon={current.saved ? "bookmark" : "bookmark-outline"}
+                  variant="secondary"
+                  loading={saving === "saved"}
+                  disabled={current.saved}
+                  onPress={() => keep("saved")}
+                  style={{ flex: 1 }}
+                />
+                <Button
+                  title={current.studying ? "On study list" : "Study list"}
+                  icon={current.studying ? "checkmark" : "school-outline"}
+                  variant="secondary"
+                  loading={saving === "study"}
+                  disabled={current.studying}
+                  onPress={() => keep("study")}
+                  style={{ flex: 1 }}
+                />
+              </View>
             </View>
           )}
 
@@ -162,7 +174,7 @@ export default function TranslateScreen() {
                       {e.en}
                     </Text>
                   </View>
-                  {e.saved && <Ionicons name="bookmark" size={16} color={colors.primary} />}
+                  {(e.saved || e.studying) && <Ionicons name="bookmark" size={16} color={colors.primary} />}
                 </Pressable>
               ))}
             </View>
@@ -222,8 +234,7 @@ const s = StyleSheet.create({
     padding: space.md,
   },
   noteText: { flex: 1, fontSize: 14, color: colors.primaryDark },
-  saved: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: space.sm, minHeight: 52 },
-  savedText: { fontSize: 15, fontWeight: "600", color: colors.success },
+  actions: { flexDirection: "row", gap: space.sm },
   recent: {
     flexDirection: "row",
     alignItems: "center",

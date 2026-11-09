@@ -138,10 +138,13 @@ app.get("/api/items", async (_req, res) => {
     `SELECT item_id, due_at <= now() AS due FROM cards`,
   );
   const cards = new Map(rows.map((r) => [r.item_id, r]));
+  const saved = await getDb().query<{ item_id: string }>(`SELECT item_id FROM saved_items`);
+  const savedIds = new Set(saved.rows.map((r) => r.item_id));
   res.json({
     items: [...itemsById.values()].map((i) => ({
       ...i,
       unitId: unitOfItem.get(i.id),
+      saved: savedIds.has(i.id),
       learned: cards.has(i.id),
       due: cards.get(i.id)?.due ?? false,
     })),
@@ -175,6 +178,23 @@ app.post("/api/review", async (req, res) => {
     await gradeCard(r.itemId, g);
   }
   await addXp(isDay(day) ? day : todayUtc(), xp);
+  res.json({ ok: true });
+});
+
+// ---- Saved words (bookmarks) ----------------------------------------------
+
+app.post("/api/saved", async (req, res) => {
+  const itemId = req.body?.itemId;
+  if (!itemsById.has(itemId)) {
+    res.status(400).json({ error: "unknown item" });
+    return;
+  }
+  await getDb().query(`INSERT INTO saved_items (item_id) VALUES ($1) ON CONFLICT DO NOTHING`, [itemId]);
+  res.json({ ok: true });
+});
+
+app.delete("/api/saved/:itemId", async (req, res) => {
+  await getDb().query(`DELETE FROM saved_items WHERE item_id = $1`, [req.params.itemId]);
   res.json({ ok: true });
 });
 
@@ -298,7 +318,7 @@ app.post("/api/translate", async (req, res) => {
   }
 });
 
-/** Save a word/phrase as your own item and put it on the study list. */
+/** Save a word/phrase as your own item, then bookmark it ("saved") or put it on the study list. */
 app.post("/api/custom-items", async (req, res) => {
   const fr = String(req.body?.fr ?? "").trim().slice(0, 300);
   const en = String(req.body?.en ?? "").trim().slice(0, 300);
@@ -316,11 +336,15 @@ app.post("/api/custom-items", async (req, res) => {
     await db.query(`INSERT INTO custom_items (id, fr, en, note) VALUES ($1, $2, $3, $4)`, [item.id, fr, en, note]);
     registerCustomItem(item);
   }
-  await db.query(
-    `INSERT INTO study_list (item_id) VALUES ($1)
-     ON CONFLICT (item_id) DO UPDATE SET clean_runs = 0`,
-    [item.id],
-  );
+  if (req.body?.to === "saved") {
+    await db.query(`INSERT INTO saved_items (item_id) VALUES ($1) ON CONFLICT DO NOTHING`, [item.id]);
+  } else {
+    await db.query(
+      `INSERT INTO study_list (item_id) VALUES ($1)
+       ON CONFLICT (item_id) DO UPDATE SET clean_runs = 0`,
+      [item.id],
+    );
+  }
   res.json({ item, existed: !!existing });
 });
 

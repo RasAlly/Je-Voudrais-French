@@ -17,7 +17,7 @@ const DRILLS: Drill[] = [
   {
     title: "Traduire",
     en: "Translate",
-    description: "Type English or French, then save it to your study list",
+    description: "Type English or French, then save it or study it",
     icon: "language-outline",
     href: "/practice/translate",
   },

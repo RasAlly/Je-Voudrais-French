@@ -35,11 +35,15 @@ export default function FlashcardsScreen() {
   const [flipped, setFlipped] = useState(false);
   const [again, setAgain] = useState<Record<string, boolean>>({});
   const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState<Set<string>>(new Set());
   const [flip] = useState(() => new Animated.Value(0));
 
   const load = () => {
     loadDeck(deck)
-      .then((items) => setQueue(shuffle(items)))
+      .then((items) => {
+        setQueue(shuffle(items));
+        setSaved(new Set(items.filter((i) => i.saved).map((i) => i.id)));
+      })
       .catch((e) => setError(e.message));
   };
   useEffect(load, [deck]);
@@ -100,6 +104,21 @@ export default function FlashcardsScreen() {
     setFlipped((f) => !f);
   };
 
+  const toggleSave = () => {
+    const id = card!.id;
+    const on = !saved.has(id);
+    Haptics.selectionAsync().catch(() => {});
+    const set = (add: boolean) =>
+      setSaved((prev) => {
+        const next = new Set(prev);
+        if (add) next.add(id);
+        else next.delete(id);
+        return next;
+      });
+    set(on);
+    (on ? api.save(id) : api.unsave(id)).catch(() => set(!on)); // undo if the server call fails
+  };
+
   const answer = (knewIt: boolean) => {
     Haptics.selectionAsync().catch(() => {});
     if (!knewIt) {
@@ -128,6 +147,18 @@ export default function FlashcardsScreen() {
         <Text style={s.count}>
           {index + 1}/{queue.length}
         </Text>
+        <Pressable
+          onPress={toggleSave}
+          hitSlop={12}
+          style={s.close}
+          accessibilityLabel={saved.has(card!.id) ? "Remove from saved" : "Save card"}
+        >
+          <Ionicons
+            name={saved.has(card!.id) ? "bookmark" : "bookmark-outline"}
+            size={24}
+            color={colors.primary}
+          />
+        </Pressable>
       </View>
 
       <Pressable style={s.cardArea} onPress={doFlip} accessibilityHint="Flips the card">
