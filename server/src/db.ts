@@ -38,8 +38,13 @@ export function getDb(): Db {
 }
 
 async function migrate() {
-  // Single-user app: no users table, progress is global.
   const statements = [
+    // Learner profiles (no passwords: pick a name on the device).
+    `CREATE TABLE IF NOT EXISTS profiles (
+      id          TEXT PRIMARY KEY,
+      name        TEXT NOT NULL,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+    )`,
     // Spaced-repetition review was removed; drop its old table.
     `DROP TABLE IF EXISTS cards`,
     `CREATE TABLE IF NOT EXISTS lesson_progress (
@@ -100,4 +105,51 @@ async function migrate() {
     )`,
   ];
   for (const s of statements) await db.query(s);
+  await addProfileColumns();
+}
+
+/** Progress that belongs to one learner: table → its own key column. */
+export const PER_PROFILE_TABLES = {
+  lesson_progress: "lesson_id",
+  study_list: "item_id",
+  activity: "day",
+  made_cards: "item_id",
+  starred_items: "item_id",
+} as const;
+
+/** Profile that owns progress saved before profiles existed. */
+export const LEGACY_PROFILE = { id: "p-main", name: "Profil 1" };
+
+/**
+ * One-time upgrade from the single-user schema: add profile_id to every
+ * per-learner table (existing rows go to the legacy profile) and make it part
+ * of the primary key. Safe to run on every boot.
+ */
+async function addProfileColumns() {
+  let hadData = false;
+  for (const [table, key] of Object.entries(PER_PROFILE_TABLES)) {
+    const col = await db.query(
+      `SELECT 1 FROM information_schema.columns WHERE table_name = $1 AND column_name = 'profile_id'`,
+      [table],
+    );
+    if (col.rows.length) continue;
+    const pk = await db.query<{ constraint_name: string }>(
+      `SELECT constraint_name FROM information_schema.table_constraints
+       WHERE table_name = $1 AND constraint_type = 'PRIMARY KEY'`,
+      [table],
+    );
+    await db.query(`ALTER TABLE ${table} ADD COLUMN profile_id TEXT NOT NULL DEFAULT '${LEGACY_PROFILE.id}'`);
+    if (pk.rows[0]) await db.query(`ALTER TABLE ${table} DROP CONSTRAINT ${pk.rows[0].constraint_name}`);
+    await db.query(`ALTER TABLE ${table} ADD PRIMARY KEY (profile_id, ${key})`);
+    await db.query(`ALTER TABLE ${table} ALTER COLUMN profile_id DROP DEFAULT`);
+    const rows = await db.query(`SELECT 1 FROM ${table} LIMIT 1`);
+    if (rows.rows.length) hadData = true;
+  }
+  if (hadData) {
+    await db.query(`INSERT INTO profiles (id, name) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING`, [
+      LEGACY_PROFILE.id,
+      LEGACY_PROFILE.name,
+    ]);
+    console.log(`Existing progress moved to profile "${LEGACY_PROFILE.name}"`);
+  }
 }

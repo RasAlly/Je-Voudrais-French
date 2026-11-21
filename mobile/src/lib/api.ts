@@ -110,8 +110,20 @@ function resolveBaseUrl() {
 export const BASE_URL = resolveBaseUrl();
 const TOKEN = process.env.EXPO_PUBLIC_APP_TOKEN ?? "";
 
+/** The learner whose progress requests read and write (set by the profile picker). */
+let profileId: string | null = null;
+export function setProfileId(id: string | null) {
+  profileId = id;
+}
+
+export interface Profile {
+  id: string;
+  name: string;
+}
+
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const headers: Record<string, string> = { "x-app-token": TOKEN, ...(init.headers as any) };
+  if (profileId) headers["x-profile-id"] = profileId;
   if (init.body && typeof init.body === "string") headers["content-type"] = "application/json";
   const res = await fetch(`${BASE_URL}${path}`, { ...init, headers });
   if (!res.ok) {
@@ -131,6 +143,11 @@ export function localDay(d = new Date()) {
 }
 
 export const api = {
+  profiles: () => request<{ profiles: Profile[] }>("/api/profiles"),
+  createProfile: (name: string) =>
+    request<{ profile: Profile }>("/api/profiles", { method: "POST", body: JSON.stringify({ name }) }),
+  renameProfile: (id: string, name: string) =>
+    request<{ profile: Profile }>(`/api/profiles/${id}`, { method: "PATCH", body: JSON.stringify({ name }) }),
   course: () => request<{ units: Unit[] }>("/api/course"),
   lesson: (id: string) =>
     request<{ lesson: { id: string; title: string; items: Item[] }; pool: Item[] }>(`/api/lessons/${id}`),

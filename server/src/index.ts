@@ -32,6 +32,66 @@ app.use("/api", (req: Request, res: Response, next: NextFunction) => {
   next();
 });
 
+// ---- Profiles ---------------------------------------------------------------
+// Each device sends the chosen profile in "x-profile-id". Endpoints that read or
+// write someone's progress call pid(req); shared content (article, daily word,
+// translator, speech) doesn't need one.
+
+class HttpError extends Error {
+  constructor(
+    public status: number,
+    message: string,
+  ) {
+    super(message);
+  }
+}
+
+const knownProfiles = new Set<string>();
+
+app.use("/api", async (req: Request, _res: Response, next: NextFunction) => {
+  const id = req.header("x-profile-id");
+  if (id && !knownProfiles.has(id)) {
+    const r = await getDb().query(`SELECT 1 FROM profiles WHERE id = $1`, [id]);
+    if (r.rows.length) knownProfiles.add(id);
+  }
+  (req as any).profileId = id && knownProfiles.has(id) ? id : null;
+  next();
+});
+
+/** The current learner's profile id, or a 400 if none was chosen. */
+function pid(req: Request): string {
+  const id = (req as any).profileId as string | null;
+  if (!id) throw new HttpError(400, "No profile selected");
+  return id;
+}
+
+app.get("/api/profiles", async (_req, res) => {
+  const { rows } = await getDb().query<{ id: string; name: string }>(
+    `SELECT id, name FROM profiles ORDER BY created_at, name`,
+  );
+  res.json({ profiles: rows });
+});
+
+app.post("/api/profiles", async (req, res) => {
+  const name = String(req.body?.name ?? "").trim().slice(0, 40);
+  if (!name) throw new HttpError(400, "Type a name");
+  const id = `p-${randomUUID().slice(0, 8)}`;
+  await getDb().query(`INSERT INTO profiles (id, name) VALUES ($1, $2)`, [id, name]);
+  knownProfiles.add(id);
+  res.json({ profile: { id, name } });
+});
+
+app.patch("/api/profiles/:id", async (req, res) => {
+  const name = String(req.body?.name ?? "").trim().slice(0, 40);
+  if (!name) throw new HttpError(400, "Type a name");
+  const r = await getDb().query<{ id: string; name: string }>(
+    `UPDATE profiles SET name = $2 WHERE id = $1 RETURNING id, name`,
+    [req.params.id, name],
+  );
+  if (!r.rows[0]) throw new HttpError(404, "Profile not found");
+  res.json({ profile: r.rows[0] });
+});
+
 const isDay = (s: unknown): s is string => typeof s === "string" && /^\d{4}-\d{2}-\d{2}$/.test(s);
 const todayUtc = () => new Date().toISOString().slice(0, 10);
 const shiftDay = (d: string, n: number) => {
@@ -40,20 +100,34 @@ const shiftDay = (d: string, n: number) => {
   return t.toISOString().slice(0, 10);
 };
 
-async function addXp(day: string, xp: number) {
+async function addXp(profile: string, day: string, xp: number) {
   if (xp <= 0) return;
   await getDb().query(
-    `INSERT INTO activity (day, xp) VALUES ($1, $2)
-     ON CONFLICT (day) DO UPDATE SET xp = activity.xp + EXCLUDED.xp`,
-    [day, Math.round(xp)],
+    `INSERT INTO activity (profile_id, day, xp) VALUES ($1, $2, $3)
+     ON CONFLICT (profile_id, day) DO UPDATE SET xp = activity.xp + EXCLUDED.xp`,
+    [profile, day, Math.round(xp)],
+  );
+}
+
+/** Insert-or-bump a lesson_progress row (lessons and grammar topics). */
+async function recordCompletion(profile: string, lessonId: string, score: number) {
+  await getDb().query(
+    `INSERT INTO lesson_progress (profile_id, lesson_id, completions, best_score, last_completed)
+     VALUES ($1, $2, 1, $3, now())
+     ON CONFLICT (profile_id, lesson_id) DO UPDATE SET
+       completions = lesson_progress.completions + 1,
+       best_score = GREATEST(lesson_progress.best_score, EXCLUDED.best_score),
+       last_completed = now()`,
+    [profile, lessonId, score],
   );
 }
 
 // ---- Course ---------------------------------------------------------------
 
-app.get("/api/course", async (_req, res) => {
+app.get("/api/course", async (req, res) => {
   const { rows } = await getDb().query<{ lesson_id: string; completions: number; best_score: number }>(
-    `SELECT lesson_id, completions, best_score FROM lesson_progress`,
+    `SELECT lesson_id, completions, best_score FROM lesson_progress WHERE profile_id = $1`,
+    [pid(req)],
   );
   const progress = new Map(rows.map((r) => [r.lesson_id, r]));
   const units = curriculum.map((u) => ({
@@ -97,35 +171,32 @@ app.post("/api/lessons/:id/complete", async (req, res) => {
     return;
   }
   const { score = 0, xp = 0, day } = req.body ?? {};
-  const db = getDb();
-
-  await db.query(
-    `INSERT INTO lesson_progress (lesson_id, completions, best_score, last_completed)
-     VALUES ($1, 1, $2, now())
-     ON CONFLICT (lesson_id) DO UPDATE SET
-       completions = lesson_progress.completions + 1,
-       best_score = GREATEST(lesson_progress.best_score, EXCLUDED.best_score),
-       last_completed = now()`,
-    [lesson.id, Math.round(score)],
-  );
-  await addXp(isDay(day) ? day : todayUtc(), xp);
+  const profile = pid(req);
+  await recordCompletion(profile, lesson.id, Math.round(Number(score) || 0));
+  await addXp(profile, isDay(day) ? day : todayUtc(), xp);
   res.json({ ok: true });
 });
 
 /** Words from every lesson you've completed at least once. */
-async function learnedItemIds() {
+async function learnedItemIds(profile: string) {
   const { rows } = await getDb().query<{ lesson_id: string }>(
-    `SELECT lesson_id FROM lesson_progress WHERE completions > 0`,
+    `SELECT lesson_id FROM lesson_progress WHERE profile_id = $1 AND completions > 0`,
+    [profile],
   );
   return new Set(rows.flatMap((r) => lessonsById.get(r.lesson_id)?.items.map((i) => i.id) ?? []));
 }
 
 /** Every item (course + your own) with your learned / saved / starred flags. */
-app.get("/api/items", async (_req, res) => {
-  const learned = await learnedItemIds();
-  const starred = await getDb().query<{ item_id: string }>(`SELECT item_id FROM starred_items`);
+app.get("/api/items", async (req, res) => {
+  const profile = pid(req);
+  const learned = await learnedItemIds(profile);
+  const starred = await getDb().query<{ item_id: string }>(`SELECT item_id FROM starred_items WHERE profile_id = $1`, [
+    profile,
+  ]);
   const starredIds = new Set(starred.rows.map((r) => r.item_id));
-  const made = await getDb().query<{ item_id: string }>(`SELECT item_id FROM made_cards`);
+  const made = await getDb().query<{ item_id: string }>(`SELECT item_id FROM made_cards WHERE profile_id = $1`, [
+    profile,
+  ]);
   const savedIds = new Set(made.rows.map((r) => r.item_id));
   res.json({
     items: [...itemsById.values()].map((i) => ({
@@ -141,7 +212,7 @@ app.get("/api/items", async (_req, res) => {
 /** XP from practice drills (numbers, etc.) that aren't tied to specific words. */
 app.post("/api/xp", async (req, res) => {
   const { xp = 0, day } = req.body ?? {};
-  await addXp(isDay(day) ? day : todayUtc(), Math.min(Number(xp) || 0, 500));
+  await addXp(pid(req), isDay(day) ? day : todayUtc(), Math.min(Number(xp) || 0, 500));
   res.json({ ok: true });
 });
 
@@ -158,11 +229,14 @@ for (const [path, table] of [
       res.status(400).json({ error: "unknown item" });
       return;
     }
-    await getDb().query(`INSERT INTO ${table} (item_id) VALUES ($1) ON CONFLICT DO NOTHING`, [itemId]);
+    await getDb().query(`INSERT INTO ${table} (profile_id, item_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`, [
+      pid(req),
+      itemId,
+    ]);
     res.json({ ok: true });
   });
   app.delete(`/api/${path}/:itemId`, async (req, res) => {
-    await getDb().query(`DELETE FROM ${table} WHERE item_id = $1`, [req.params.itemId]);
+    await getDb().query(`DELETE FROM ${table} WHERE profile_id = $1 AND item_id = $2`, [pid(req), req.params.itemId]);
     res.json({ ok: true });
   });
 }
@@ -172,9 +246,10 @@ for (const [path, table] of [
 /** Clean deep dives needed before a word graduates off the study list. */
 const STUDY_GRADUATE_RUNS = 2;
 
-app.get("/api/study", async (_req, res) => {
+app.get("/api/study", async (req, res) => {
   const { rows } = await getDb().query<{ item_id: string; clean_runs: number; misses: number }>(
-    `SELECT item_id, clean_runs, misses FROM study_list ORDER BY added_at DESC`,
+    `SELECT item_id, clean_runs, misses FROM study_list WHERE profile_id = $1 ORDER BY added_at DESC`,
+    [pid(req)],
   );
   const items = rows
     .filter((r) => itemsById.has(r.item_id))
@@ -190,15 +265,15 @@ app.post("/api/study", async (req, res) => {
   }
   // Re-adding a word resets its progress toward graduation.
   await getDb().query(
-    `INSERT INTO study_list (item_id) VALUES ($1)
-     ON CONFLICT (item_id) DO UPDATE SET misses = study_list.misses + 1, clean_runs = 0`,
-    [itemId],
+    `INSERT INTO study_list (profile_id, item_id) VALUES ($1, $2)
+     ON CONFLICT (profile_id, item_id) DO UPDATE SET misses = study_list.misses + 1, clean_runs = 0`,
+    [pid(req), itemId],
   );
   res.json({ ok: true });
 });
 
 app.delete("/api/study/:itemId", async (req, res) => {
-  await getDb().query(`DELETE FROM study_list WHERE item_id = $1`, [req.params.itemId]);
+  await getDb().query(`DELETE FROM study_list WHERE profile_id = $1 AND item_id = $2`, [pid(req), req.params.itemId]);
   res.json({ ok: true });
 });
 
@@ -206,23 +281,27 @@ app.delete("/api/study/:itemId", async (req, res) => {
 app.post("/api/study/results", async (req, res) => {
   const { results = [], xp = 0, day } = req.body ?? {};
   const db = getDb();
+  const profile = pid(req);
   const graduated: string[] = [];
   for (const r of results as { itemId: string; clean: boolean }[]) {
     if (!itemsById.has(r.itemId)) continue;
     if (!r.clean) {
-      await db.query(`UPDATE study_list SET clean_runs = 0 WHERE item_id = $1`, [r.itemId]);
+      await db.query(`UPDATE study_list SET clean_runs = 0 WHERE profile_id = $1 AND item_id = $2`, [
+        profile,
+        r.itemId,
+      ]);
       continue;
     }
     const { rows } = await db.query<{ clean_runs: number }>(
-      `UPDATE study_list SET clean_runs = clean_runs + 1 WHERE item_id = $1 RETURNING clean_runs`,
-      [r.itemId],
+      `UPDATE study_list SET clean_runs = clean_runs + 1 WHERE profile_id = $1 AND item_id = $2 RETURNING clean_runs`,
+      [profile, r.itemId],
     );
     if (rows[0] && rows[0].clean_runs >= STUDY_GRADUATE_RUNS) {
-      await db.query(`DELETE FROM study_list WHERE item_id = $1`, [r.itemId]);
+      await db.query(`DELETE FROM study_list WHERE profile_id = $1 AND item_id = $2`, [profile, r.itemId]);
       graduated.push(r.itemId);
     }
   }
-  await addXp(isDay(day) ? day : todayUtc(), xp);
+  await addXp(profile, isDay(day) ? day : todayUtc(), xp);
   res.json({ ok: true, graduated });
 });
 
@@ -310,6 +389,7 @@ app.post("/api/custom-items", async (req, res) => {
     return;
   }
   const db = getDb();
+  const profile = pid(req);
   // Same French text saved twice → reuse the existing item.
   const existing = [...itemsById.values()].find((i) => i.fr.toLowerCase() === fr.toLowerCase());
   let item = existing;
@@ -319,12 +399,15 @@ app.post("/api/custom-items", async (req, res) => {
     registerCustomItem(item);
   }
   if (req.body?.to === "saved") {
-    await db.query(`INSERT INTO made_cards (item_id) VALUES ($1) ON CONFLICT DO NOTHING`, [item.id]);
+    await db.query(`INSERT INTO made_cards (profile_id, item_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`, [
+      profile,
+      item.id,
+    ]);
   } else {
     await db.query(
-      `INSERT INTO study_list (item_id) VALUES ($1)
-       ON CONFLICT (item_id) DO UPDATE SET clean_runs = 0`,
-      [item.id],
+      `INSERT INTO study_list (profile_id, item_id) VALUES ($1, $2)
+       ON CONFLICT (profile_id, item_id) DO UPDATE SET clean_runs = 0`,
+      [profile, item.id],
     );
   }
   res.json({ item, existed: !!existing });
@@ -333,9 +416,11 @@ app.post("/api/custom-items", async (req, res) => {
 // ---- Grammar progress -------------------------------------------------------
 // Stored in lesson_progress under "grammar:<topic>" (topics live in the app).
 
-app.get("/api/grammar", async (_req, res) => {
+app.get("/api/grammar", async (req, res) => {
   const { rows } = await getDb().query<{ lesson_id: string; completions: number; best_score: number }>(
-    `SELECT lesson_id, completions, best_score FROM lesson_progress WHERE lesson_id LIKE 'grammar:%'`,
+    `SELECT lesson_id, completions, best_score FROM lesson_progress
+     WHERE profile_id = $1 AND lesson_id LIKE 'grammar:%'`,
+    [pid(req)],
   );
   res.json({
     progress: Object.fromEntries(
@@ -351,16 +436,9 @@ app.post("/api/grammar/:topic/complete", async (req, res) => {
     return;
   }
   const { score = 0, xp = 0, day } = req.body ?? {};
-  await getDb().query(
-    `INSERT INTO lesson_progress (lesson_id, completions, best_score, last_completed)
-     VALUES ($1, 1, $2, now())
-     ON CONFLICT (lesson_id) DO UPDATE SET
-       completions = lesson_progress.completions + 1,
-       best_score = GREATEST(lesson_progress.best_score, EXCLUDED.best_score),
-       last_completed = now()`,
-    [`grammar:${topic}`, Math.max(0, Math.min(100, Math.round(Number(score) || 0)))],
-  );
-  await addXp(isDay(day) ? day : todayUtc(), Math.min(Number(xp) || 0, 100));
+  const profile = pid(req);
+  await recordCompletion(profile, `grammar:${topic}`, Math.max(0, Math.min(100, Math.round(Number(score) || 0))));
+  await addXp(profile, isDay(day) ? day : todayUtc(), Math.min(Number(xp) || 0, 100));
   res.json({ ok: true });
 });
 
@@ -540,9 +618,12 @@ app.get("/api/daily-word", async (req, res) => {
 app.get("/api/stats", async (req, res) => {
   const today = isDay(req.query.today) ? req.query.today : todayUtc();
   const db = getDb();
+  const profile = pid(req);
 
   const days = await db.query<{ day: string; xp: number }>(
-    `SELECT to_char(day, 'YYYY-MM-DD') AS day, xp FROM activity WHERE xp > 0 ORDER BY day DESC LIMIT 400`,
+    `SELECT to_char(day, 'YYYY-MM-DD') AS day, xp FROM activity
+     WHERE profile_id = $1 AND xp > 0 ORDER BY day DESC LIMIT 400`,
+    [profile],
   );
   const active = new Set(days.rows.map((d) => d.day));
 
@@ -565,13 +646,13 @@ app.get("/api/stats", async (req, res) => {
   });
 
   const totalXp = days.rows.reduce((s, d) => s + Number(d.xp), 0);
-  const study = await db.query<{ n: string }>(`SELECT COUNT(*) AS n FROM study_list`);
+  const study = await db.query<{ n: string }>(`SELECT COUNT(*) AS n FROM study_list WHERE profile_id = $1`, [profile]);
 
   res.json({
     streak,
     xpToday: week[6].xp,
     totalXp,
-    learned: (await learnedItemIds()).size,
+    learned: (await learnedItemIds(profile)).size,
     study: Number(study.rows[0]?.n ?? 0),
     week,
   });
@@ -641,6 +722,10 @@ app.post("/api/transcribe", upload.single("audio"), async (req, res) => {
 });
 
 app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
+  if (err instanceof HttpError) {
+    res.status(err.status).json({ error: err.message });
+    return;
+  }
   console.error(err);
   res.status(500).json({ error: "internal error" });
 });

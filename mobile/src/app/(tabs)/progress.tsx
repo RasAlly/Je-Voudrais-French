@@ -1,8 +1,10 @@
-import { ScrollView, StyleSheet, Text, View } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ErrorState, Loading } from "../../components/States";
 import { Card } from "../../components/ui";
 import { api, BASE_URL } from "../../lib/api";
+import { useProfile } from "../../lib/profile";
 import { useLoad } from "../../lib/useLoad";
 import { colors, fonts, radius, space } from "../../theme";
 
@@ -10,6 +12,24 @@ const DAY_LETTERS = ["S", "M", "T", "W", "T", "F", "S"];
 
 export default function ProgressScreen() {
   const { data, error, loading, reload } = useLoad(() => api.stats());
+  const { profile, switchProfile, rename } = useProfile();
+
+  const askRename = () =>
+    Alert.prompt(
+      "Rename profile",
+      undefined,
+      (name) => {
+        if (name?.trim()) rename(name.trim()).catch((e) => Alert.alert("Couldn't rename", (e as Error).message));
+      },
+      "plain-text",
+      profile?.name,
+    );
+
+  const askSwitch = () =>
+    Alert.alert("Switch profile?", "You'll pick who's learning on this device.", [
+      { text: "Cancel", style: "cancel" },
+      { text: "Switch", onPress: () => switchProfile() },
+    ]);
 
   if (error) return <ErrorState message={error} onRetry={reload} />;
   if (!data && loading) return <Loading />;
@@ -21,6 +41,20 @@ export default function ProgressScreen() {
     <SafeAreaView style={s.screen} edges={["top"]}>
       <ScrollView contentContainerStyle={s.content}>
         <Text style={s.title}>Progrès</Text>
+
+        <View style={s.profile}>
+          <View style={s.avatar}>
+            <Text style={s.avatarText}>{profile?.name.charAt(0).toUpperCase()}</Text>
+          </View>
+          <Pressable onPress={askRename} style={{ flex: 1 }} accessibilityLabel="Rename profile">
+            <Text style={s.profileName}>{profile?.name}</Text>
+            <Text style={s.profileHint}>Tap to rename</Text>
+          </Pressable>
+          <Pressable onPress={askSwitch} hitSlop={8} style={s.switch}>
+            <Ionicons name="swap-horizontal" size={16} color={colors.primary} />
+            <Text style={s.switchText}>Switch</Text>
+          </Pressable>
+        </View>
 
         <View style={s.grid}>
           <Tile value={`🔥 ${data.streak}`} label="day streak" />
@@ -92,5 +126,36 @@ const s = StyleSheet.create({
   },
   bar: { width: "100%", backgroundColor: colors.primary, borderRadius: radius.sm },
   barLabel: { fontSize: 12, color: colors.textMuted },
+  profile: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: space.md,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    padding: space.md,
+  },
+  avatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: colors.primary,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  avatarText: { fontFamily: fonts.serif, fontSize: 20, color: colors.onPrimary },
+  profileName: { fontSize: 18, fontWeight: "600", color: colors.text },
+  profileHint: { fontSize: 12, color: colors.textMuted },
+  switch: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: radius.pill,
+    backgroundColor: colors.primarySoft,
+  },
+  switchText: { fontSize: 14, fontWeight: "600", color: colors.primary },
   footer: { fontSize: 12, color: colors.locked, textAlign: "center" },
 });
